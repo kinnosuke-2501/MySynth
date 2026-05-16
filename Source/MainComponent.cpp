@@ -2,6 +2,63 @@
 
 static constexpr int kNumVoices = 16;
 
+namespace
+{
+struct InstrumentSpec
+{
+    int lowNote;
+    int highNote;
+    const char* modelName;
+};
+
+constexpr InstrumentSpec kWurlitzerSpec { 33, 96,  "WURLI 64A"        }; // A1-C7, 64 keys
+constexpr InstrumentSpec kRhodesSpec    { 28, 100, "ROADS STAGE 73"   }; // E1-E7, 73 keys
+
+const InstrumentSpec& getInstrumentSpec (bool isWurlitzer)
+{
+    return isWurlitzer ? kWurlitzerSpec : kRhodesSpec;
+}
+
+bool isBlackMidiNote (int midiNoteNumber)
+{
+    switch (midiNoteNumber % 12)
+    {
+        case 1: case 3: case 6: case 8: case 10: return true;
+        default: return false;
+    }
+}
+
+int countWhiteKeysInRange (int lowNote, int highNote)
+{
+    int count = 0;
+    for (int note = lowNote; note <= highNote; ++note)
+        if (! isBlackMidiNote (note))
+            ++count;
+
+    return count;
+}
+
+float getKeyboardKeyWidth (int componentWidth, const InstrumentSpec& spec)
+{
+    const auto whiteKeys = juce::jmax (1, countWhiteKeysInRange (spec.lowNote, spec.highNote));
+    return juce::jmin (18.0f, (float) componentWidth / (float) whiteKeys);
+}
+
+int getKeyboardPixelWidth (float keyWidth, const InstrumentSpec& spec)
+{
+    const auto whiteKeys = juce::jmax (1, countWhiteKeysInRange (spec.lowNote, spec.highNote));
+    return juce::roundToInt (keyWidth * (float) whiteKeys);
+}
+
+juce::Font makeTitleFont (float height)
+{
+    return juce::Font (juce::FontOptions ("Avenir Next Condensed", "Heavy", height)
+                           .withKerningFactor (0.16f)
+                           .withHorizontalScale (1.08f)
+                           .withFallbacks ({ "Helvetica Neue", "Arial Narrow", "Arial" }));
+}
+}
+
 // ---- Preset data --------------------------------------------------------
 // Each preset defines the full FM voice character plus default knob positions.
 struct PresetData
@@ -79,7 +136,8 @@ MainComponent::MainComponent()
 
     // ---- Title ----
     titleLabel.setText("ELECTRIC PIANO", juce::dontSendNotification);
-    titleLabel.setFont(juce::Font(juce::FontOptions{}.withHeight(24.0f).withStyle("Bold")));
+    titleLabel.setFont(makeTitleFont(30.0f));
+    titleLabel.setColour(juce::Label::textColourId, juce::Colour(0xfff0ede4));
     titleLabel.setJustificationType(juce::Justification::centredLeft);
     addAndMakeVisible(titleLabel);
 
@@ -89,6 +147,26 @@ MainComponent::MainComponent()
     statusLabel.setColour(juce::Label::textColourId, juce::Colour(VintageLookAndFeel::kColourTextDim));
     statusLabel.setJustificationType(juce::Justification::centredLeft);
     addAndMakeVisible(statusLabel);
+
+    keyboardComponent.setBlackNoteLengthProportion(0.62f);
+    keyboardComponent.setWantsKeyboardFocus(false);
+    keyboardComponent.setScrollButtonsVisible(false);
+    keyboardComponent.setInterceptsMouseClicks(true, true);
+    keyboardComponent.setColour(juce::MidiKeyboardComponent::whiteNoteColourId,
+                                juce::Colour(0xfff2e7c8));
+    keyboardComponent.setColour(juce::MidiKeyboardComponent::blackNoteColourId,
+                                juce::Colour(0xff16120d));
+    keyboardComponent.setColour(juce::MidiKeyboardComponent::keySeparatorLineColourId,
+                                juce::Colour(VintageLookAndFeel::kColourDivider));
+    keyboardComponent.setColour(juce::MidiKeyboardComponent::shadowColourId,
+                                juce::Colours::transparentBlack);
+    keyboardComponent.setColour(juce::MidiKeyboardComponent::keyDownOverlayColourId,
+                                juce::Colour(VintageLookAndFeel::kColourLEDOn).withAlpha(0.45f));
+    keyboardComponent.setColour(juce::MidiKeyboardComponent::mouseOverKeyOverlayColourId,
+                                juce::Colours::transparentBlack);
+    keyboardComponent.setColour(juce::MidiKeyboardComponent::textLabelColourId,
+                                juce::Colour(0xff5c4a2a));
+    addAndMakeVisible(keyboardComponent);
 
     // hintLabel not shown in vintage layout
     addChildComponent(hintLabel);
@@ -116,6 +194,8 @@ MainComponent::MainComponent()
     // Preset buttons: use toggle state so VintageLookAndFeel can highlight the active one
     wurlitzerButton.setClickingTogglesState(false);
     rhodesButton.setClickingTogglesState(false);
+    wurlitzerButton.setButtonText("WURLI");
+    rhodesButton.setButtonText("ROADS");
     wurlitzerButton.setToggleState(true,  juce::dontSendNotification);
     rhodesButton.setToggleState(false, juce::dontSendNotification);
     addAndMakeVisible(wurlitzerButton);
@@ -176,6 +256,7 @@ MainComponent::MainComponent()
     setSize(800, 520);
     setAudioChannels(0, 2);
     openAllMidiInputs();
+    applyPreset(currentPreset);
     startTimer(80);   // ~12fps repaint for VU meter
 }
 
@@ -231,6 +312,7 @@ void MainComponent::applyPreset(Preset p)
 {
     currentPreset = p;
     const PresetData& d = (p == Preset::Wurlitzer) ? kPresetWurlitzer : kPresetRhodes;
+    const auto& spec = getInstrumentSpec(p == Preset::Wurlitzer);
 
     // Update voice parameters (audio thread reads these atomically on next note-on).
     synthParams.modRatio       = d.modRatio;
@@ -280,6 +362,18 @@ void MainComponent::applyPreset(Preset p)
     bool isWurl = (p == Preset::Wurlitzer);
     wurlitzerButton.setToggleState( isWurl, juce::dontSendNotification);
     rhodesButton   .setToggleState(!isWurl, juce::dontSendNotification);
+
+    keyboardComponent.setAvailableRange(spec.lowNote, spec.highNote);
+    keyboardComponent.setLowestVisibleKey(spec.lowNote);
+    if (keyboardComponent.getWidth() > 0)
+        keyboardComponent.setKeyWidth(getKeyboardKeyWidth(keyboardComponent.getWidth(), spec));
+
+    activeNoteCount.set(0);
+    keyboardState.reset();
+
+    // Recompute keyboard bounds immediately so preset changes also update the visible width.
+    resized();
+    repaint();
 
     // Stop any hanging notes so changes take effect cleanly.
     synthesiser.allNotesOff(0, true);
@@ -332,6 +426,8 @@ void MainComponent::prepareToPlay(int samplesPerBlockExpected, double sampleRate
 
 void MainComponent::getNextAudioBlock(const juce::AudioSourceChannelInfo& bufferToFill)
 {
+    const auto& instrument = getInstrumentSpec(currentPreset == Preset::Wurlitzer);
+
     // Apply chorus mix change (preset switch or future knob).
     {
         float newMix = chorusMixAmt.load();
@@ -358,10 +454,37 @@ void MainComponent::getNextAudioBlock(const juce::AudioSourceChannelInfo& buffer
 
     bufferToFill.clearActiveBufferRegion();
 
-    juce::MidiBuffer incomingMidi;
-    midiCollector.removeNextBlockOfMessages(incomingMidi, bufferToFill.numSamples);
+    juce::MidiBuffer queuedMidi;
+    midiCollector.removeNextBlockOfMessages(queuedMidi, bufferToFill.numSamples);
 
-    synthesiser.renderNextBlock(*bufferToFill.buffer, incomingMidi,
+    juce::MidiBuffer playableMidi;
+    for (const auto metadata : queuedMidi)
+    {
+        const auto message = metadata.getMessage();
+        if (! message.isNoteOnOrOff()
+            || (message.getNoteNumber() >= instrument.lowNote
+                && message.getNoteNumber() <= instrument.highNote))
+        {
+            playableMidi.addEvent(message, metadata.samplePosition);
+        }
+    }
+
+    keyboardState.processNextMidiBuffer(playableMidi, 0, bufferToFill.numSamples, true);
+
+    int noteDelta = 0;
+    for (const auto metadata : playableMidi)
+    {
+        const auto message = metadata.getMessage();
+        if (message.isNoteOn())
+            ++noteDelta;
+        else if (message.isNoteOff())
+            --noteDelta;
+    }
+
+    if (noteDelta != 0)
+        activeNoteCount.set(juce::jmax(0, activeNoteCount.get() + noteDelta));
+
+    synthesiser.renderNextBlock(*bufferToFill.buffer, playableMidi,
                                 bufferToFill.startSample, bufferToFill.numSamples);
 
     // Effects chain: Chorus → Tremolo → Reverb
@@ -480,11 +603,7 @@ void MainComponent::handleIncomingMidiMessage(juce::MidiInput*, const juce::Midi
     midiCollector.addMessageToQueue(message);
 
     // UI indicator updates (no effect on audio processing).
-    if (message.isNoteOn())
-        activeNoteCount.set(activeNoteCount.get() + 1);
-    else if (message.isNoteOff() || (message.isNoteOn() && message.getVelocity() == 0))
-        activeNoteCount.set(juce::jmax(0, activeNoteCount.get() - 1));
-    else if (message.isController() && message.getControllerNumber() == 64)
+    if (message.isController() && message.getControllerNumber() == 64)
     {
         const int newPedalState = message.getControllerValue() >= 64 ? 1 : 0;
         const int previousPedalState = sustainPedalDown.get();
@@ -500,8 +619,18 @@ void MainComponent::handleIncomingMidiMessage(juce::MidiInput*, const juce::Midi
 void MainComponent::paint(juce::Graphics& g)
 {
     using C = VintageLookAndFeel;
+    const auto& instrument = getInstrumentSpec(currentPreset == Preset::Wurlitzer);
     const int W = getWidth();
     const int H = getHeight();
+    const int kSectionTop = 66;
+    const int kSectionH   = 190;
+    const int kDivX       = W * 54 / 100;
+    auto keyboardBay = keyboardComponent.getBounds().expanded(8, 8);
+    if (keyboardBay.isEmpty())
+        keyboardBay = { 14, kSectionTop + kSectionH + 16, W - 28, juce::jlimit(72, 96, H / 6) };
+
+    const int footerTop   = keyboardBay.getBottom() + 16;
+    const int footerH     = juce::jmax(72, H - footerTop - 16);
 
     // ── Background ────────────────────────────────────────────────────────────
     g.fillAll(juce::Colour(C::kColourBody));
@@ -514,11 +643,12 @@ void MainComponent::paint(juce::Graphics& g)
     g.setColour(juce::Colour(C::kColourDivider));
     g.fillRect(0, 63, W, 2);
 
-    // ── "ELECTRIC PIANO" vintage logo engraving ───────────────────────────────
-    // (title label is drawn by JUCE on top; this adds a subtle emboss shadow)
-    g.setColour(juce::Colour(C::kColourDivider).withAlpha(0.55f));
-    g.setFont(juce::Font(juce::FontOptions{}.withHeight(24.0f).withStyle("Bold")));
-    g.drawText("ELECTRIC PIANO", 16 + 1, 20 + 1, 280, 28, juce::Justification::centredLeft);
+    // Title accent
+    g.setColour(juce::Colour(C::kColourTrackFill).withAlpha(0.9f));
+    g.fillRoundedRectangle(18.0f, 49.0f, 156.0f, 2.2f, 1.1f);
+    g.setColour(juce::Colour(C::kColourTextDim).withAlpha(0.55f));
+    g.setFont(juce::Font(juce::FontOptions("Menlo", 8.5f, juce::Font::plain).withKerningFactor(0.14f)));
+    g.drawText("STAGE FM ELECTRIC PIANO", 18, 52, 220, 10, juce::Justification::centredLeft);
 
     // ── Preset region label ───────────────────────────────────────────────────
     g.setColour(juce::Colour(C::kColourTextDim));
@@ -558,10 +688,6 @@ void MainComponent::paint(juce::Graphics& g)
     g.drawText("SUS", (int)ledX2 - 2, (int)(ledY + ledD + 1), 14, 8, juce::Justification::centred);
 
     // ── Section panel backgrounds ─────────────────────────────────────────────
-    const int kSectionTop = 66;
-    const int kSectionH   = 190;
-    const int kDivX       = W * 54 / 100;
-
     // Subtle inner glow border around sections
     g.setColour(juce::Colour(C::kColourDivider).withAlpha(0.45f));
     g.drawRect(14, kSectionTop, kDivX - 20, kSectionH, 1);
@@ -577,116 +703,139 @@ void MainComponent::paint(juce::Graphics& g)
     g.setColour(juce::Colour(C::kColourDivider));
     g.fillRect(kDivX, kSectionTop + 16, 1, kSectionH - 20);
 
-    // ── Chassis decorative area ───────────────────────────────────────────────
-    const int chassisTop = kSectionTop + kSectionH + 8;
-    const int chassisH   = H - chassisTop - 56;
-    if (chassisH > 20)
+    // ── Keyboard bay ──────────────────────────────────────────────────────────
+    g.setColour(juce::Colour(0xff14110d));
+    g.fillRoundedRectangle(keyboardBay.toFloat(), 6.0f);
+    g.setColour(juce::Colour(C::kColourDivider).withAlpha(0.42f));
+    g.drawRoundedRectangle(keyboardBay.toFloat(), 6.0f, 1.0f);
+    g.setColour(juce::Colour(C::kColourTextDim));
+    g.setFont(juce::Font(juce::FontOptions{}.withHeight(9.0f)));
+    g.drawText("MIDI KEYBOARD", keyboardBay.getX() + 10, keyboardBay.getY() - 12, 90, 10, juce::Justification::centredLeft);
+
+    // ── Footer / meter panel ─────────────────────────────────────────────────
+    if (footerH > 20)
     {
-        // Inset recessed panel
+        const int meterX = 14;
+        const int meterY = footerTop + 18;
+        const int meterW = W - 28;
+        const int meterH = 12;
+
         g.setColour(juce::Colour(0xff161410));
-        g.fillRect(14, chassisTop, W - 28, chassisH);
+        g.fillRoundedRectangle(14.0f, (float) footerTop, (float) (W - 28), (float) footerH, 6.0f);
         g.setColour(juce::Colour(C::kColourDivider).withAlpha(0.30f));
-        g.drawRect(14, chassisTop, W - 28, chassisH, 1);
+        g.drawRoundedRectangle(14.0f, (float) footerTop, (float) (W - 28), (float) footerH, 6.0f, 1.0f);
 
         // Model name plate
-        const juce::String modelName = (currentPreset == Preset::Wurlitzer)
-                                        ? "WURLITZER 200A"
-                                        : "RHODES MARK II";
         g.setColour(juce::Colour(C::kColourKnobCap).withAlpha(0.55f));
-        g.setFont(juce::Font(juce::FontOptions{}.withHeight(18.0f).withStyle("Bold")));
-        g.drawText(modelName, 14, chassisTop + chassisH / 2 - 14, W - 28, 28,
-                   juce::Justification::centred);
+        g.setFont(juce::Font(juce::FontOptions{}.withHeight(13.0f).withStyle("Bold")));
+        g.drawText(instrument.modelName, 0, footerTop + footerH - 26, W, 16, juce::Justification::centred);
 
         // Decorative vent lines
         g.setColour(juce::Colour(C::kColourDivider).withAlpha(0.25f));
-        const int ventY0 = chassisTop + 8;
         for (int v = 0; v < 4; ++v)
         {
-            int vy = ventY0 + v * 5;
-            if (vy + 2 < chassisTop + chassisH - 8)
-                g.fillRect(W / 2 - 60, vy, 120, 2);
+            const int vy = footerTop + 42 + v * 4;
+            g.fillRect(W / 2 - 60, vy, 120, 1);
         }
+
+        // ── VU meter ──────────────────────────────────────────────────────────
+        const int vuY  = meterY;
+        const int vuX  = meterX;
+        const int vuW  = meterW;
+        const int vuH  = meterH;
+
+        // dB tick marks (above bar)
+        g.setFont(juce::Font(juce::FontOptions{}.withHeight(8.0f)));
+        for (float db : { -30.0f, -20.0f, -12.0f, -6.0f, -3.0f })
+        {
+            const float t  = juce::jmap(db, -42.0f, 0.0f, 0.0f, 1.0f);
+            const int   tx = vuX + (int) (t * (float) vuW);
+            g.setColour(juce::Colour(C::kColourTextDim).withAlpha(0.45f));
+            g.fillRect(tx, vuY - 6, 1, 4);
+            g.setColour(juce::Colour(C::kColourTextDim).withAlpha(0.6f));
+            g.drawText(juce::String((int) db), tx - 8, vuY - 16, 20, 10,
+                       juce::Justification::centred);
+        }
+
+        // 0 dB marker (brighter)
+        {
+            const int tx = vuX + vuW;
+            g.setColour(juce::Colour(C::kColourLEDOn).withAlpha(0.55f));
+            g.fillRect(tx - 1, vuY - 6, 1, 4);
+            g.setColour(juce::Colour(C::kColourLEDOn).withAlpha(0.8f));
+            g.drawText("0", tx - 8, vuY - 16, 20, 10, juce::Justification::centred);
+        }
+
+        // Bar background
+        g.setColour(juce::Colour(C::kColourTrackBg));
+        g.fillRoundedRectangle((float) vuX, (float) vuY, (float) vuW, (float) vuH, 3.0f);
+
+        // Bar fill with green→amber→red gradient
+        const float levelRMS   = vuLevel.load();
+        const float levelDB    = 20.0f * std::log10(juce::jmax(levelRMS, 1e-5f));
+        const float normalised = juce::jlimit(0.0f, 1.0f,
+                                              juce::jmap(levelDB, -42.0f, 0.0f, 0.0f, 1.0f));
+        if (normalised > 0.001f)
+        {
+            const float fillW = normalised * (float) vuW;
+            juce::ColourGradient grad (juce::Colour(0xff3aaa1a), (float) vuX, 0.0f,
+                                       juce::Colour(0xffff2200), (float) (vuX + vuW), 0.0f, false);
+            grad.addColour(0.65, juce::Colour(C::kColourTrackFill));
+            grad.addColour(0.85, juce::Colour(C::kColourLEDOn));
+            g.setGradientFill(grad);
+            g.fillRoundedRectangle((float) vuX, (float) vuY, fillW, (float) vuH, 3.0f);
+        }
+
+        // "VU" label
+        g.setColour(juce::Colour(C::kColourTextDim));
+        g.setFont(juce::Font(juce::FontOptions{}.withHeight(9.0f)));
+        g.drawText("VU", vuX, vuY - 16, 18, 10, juce::Justification::centredLeft);
     }
-
-    // ── VU meter ──────────────────────────────────────────────────────────────
-    const int vuY  = H - 50;
-    const int vuX  = 14;
-    const int vuW  = W - 28;
-    const int vuH  = 12;
-
-    // dB tick marks (above bar)
-    g.setFont(juce::Font(juce::FontOptions{}.withHeight(8.0f)));
-    for (float db : { -30.0f, -20.0f, -12.0f, -6.0f, -3.0f })
-    {
-        const float t  = juce::jmap(db, -42.0f, 0.0f, 0.0f, 1.0f);
-        const int   tx = vuX + (int)(t * (float)vuW);
-        g.setColour(juce::Colour(C::kColourTextDim).withAlpha(0.45f));
-        g.fillRect(tx, vuY - 6, 1, 4);
-        g.setColour(juce::Colour(C::kColourTextDim).withAlpha(0.6f));
-        g.drawText(juce::String((int)db), tx - 8, vuY - 16, 20, 10,
-                   juce::Justification::centred);
-    }
-    // 0 dB marker (brighter)
-    {
-        const int tx = vuX + vuW;
-        g.setColour(juce::Colour(C::kColourLEDOn).withAlpha(0.55f));
-        g.fillRect(tx - 1, vuY - 6, 1, 4);
-        g.setColour(juce::Colour(C::kColourLEDOn).withAlpha(0.8f));
-        g.drawText("0", tx - 8, vuY - 16, 20, 10, juce::Justification::centred);
-    }
-
-    // Bar background
-    g.setColour(juce::Colour(C::kColourTrackBg));
-    g.fillRoundedRectangle((float)vuX, (float)vuY, (float)vuW, (float)vuH, 3.0f);
-
-    // Bar fill with green→amber→red gradient
-    const float levelRMS   = vuLevel.load();
-    const float levelDB    = 20.0f * std::log10(juce::jmax(levelRMS, 1e-5f));
-    const float normalised = juce::jlimit(0.0f, 1.0f,
-                                           juce::jmap(levelDB, -42.0f, 0.0f, 0.0f, 1.0f));
-    if (normalised > 0.001f)
-    {
-        const float fillW = normalised * (float)vuW;
-        juce::ColourGradient grad (juce::Colour(0xff3aaa1a), (float)vuX,        0.0f,
-                                    juce::Colour(0xffff2200), (float)(vuX + vuW), 0.0f, false);
-        grad.addColour(0.65, juce::Colour(C::kColourTrackFill));
-        grad.addColour(0.85, juce::Colour(C::kColourLEDOn));
-        g.setGradientFill(grad);
-        g.fillRoundedRectangle((float)vuX, (float)vuY, fillW, (float)vuH, 3.0f);
-    }
-
-    // "VU" label
-    g.setColour(juce::Colour(C::kColourTextDim));
-    g.setFont(juce::Font(juce::FontOptions{}.withHeight(9.0f)));
-    g.drawText("VU", vuX, vuY - 16, 18, 10, juce::Justification::centredLeft);
 }
 
 void MainComponent::resized()
 {
+    const auto& instrument = getInstrumentSpec(currentPreset == Preset::Wurlitzer);
     const int W = getWidth();
     const int H = getHeight();
+    const int kSectionTop = 66;
+    const int kDivX       = W * 54 / 100;
+    const int keyboardY   = kSectionTop + 190 + 16;
+    const int keyboardH   = juce::jlimit(72, 96, H / 6);
+    const int footerTop   = keyboardY + keyboardH + 16;
+    const int footerH     = juce::jmax(72, H - footerTop - 16);
+    const int footerButtonY = footerTop + footerH - 44;
 
     // ── Header row (y 0–64) ───────────────────────────────────────────────────
     // Title label (left)
-    titleLabel.setBounds(16, 18, 260, 32);
+    titleLabel.setBounds(16, 12, 320, 36);
 
     // Preset buttons (right side of header)
     const int btnY = 16, btnH = 32;
     rhodesButton   .setBounds(W - 14 - 96,       btnY, 96,  btnH);
     wurlitzerButton.setBounds(W - 14 - 96 - 110, btnY, 106, btnH);
 
-    // Settings button (bottom-right)
-    settingsButton.setBounds(W - 14 - 110, H - 44, 110, 34);
+    {
+        auto keyboardArea = juce::Rectangle<int>(22, keyboardY + 8, W - 44, keyboardH - 16);
+        const auto keyWidth = getKeyboardKeyWidth(keyboardArea.getWidth(), instrument);
+        const auto keyboardWidth = juce::jmin(keyboardArea.getWidth(), getKeyboardPixelWidth(keyWidth, instrument));
+        const int keyboardX = keyboardArea.getX() + (keyboardArea.getWidth() - keyboardWidth) / 2;
 
-    // Panic button (bottom-left)
-    panicButton.setBounds(14, H - 44, 78, 34);
+        keyboardComponent.setBounds(keyboardX, keyboardArea.getY(), keyboardWidth, keyboardArea.getHeight());
+        keyboardComponent.setKeyWidth(keyWidth);
+    }
+    keyboardComponent.setLowestVisibleKey(instrument.lowNote);
 
-    // Status label (bottom, left of center)
-    statusLabel.setBounds(100, H - 40, W / 2, 14);
+    // Settings button (footer-right, below VU)
+    settingsButton.setBounds(W - 14 - 110, footerButtonY, 110, 30);
+
+    // Panic button (footer-left, below VU)
+    panicButton.setBounds(14, footerButtonY, 82, 30);
+
+    // Status label (footer center, below VU)
+    statusLabel.setBounds(110, footerButtonY + 8, W - 240, 14);
 
     // ── Knob sections ─────────────────────────────────────────────────────────
-    const int kSectionTop = 66;
-    const int kDivX       = W * 54 / 100;   // divider x between SOUND and FX sections
     const int kLabelH     = 14;
     const int kKnobH      = 110;            // slider bounds height (knob + text box)
     const int kSectionPad = 16;             // top padding inside section (below section title)

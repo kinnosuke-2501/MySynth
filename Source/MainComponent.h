@@ -66,14 +66,16 @@ private:
 
     juce::Atomic<int> activeNoteCount  { 0 };
     juce::Atomic<int> sustainPedalDown { 0 };
+    juce::MidiKeyboardState keyboardState;
+    juce::MidiKeyboardComponent keyboardComponent { keyboardState, juce::MidiKeyboardComponent::horizontalKeyboard };
 
     juce::Label       titleLabel;
     juce::Label       statusLabel;
     juce::Label       hintLabel;
     juce::TextButton  settingsButton   { "Settings..." };
     juce::TextButton  panicButton      { "Panic" };
-    juce::TextButton  wurlitzerButton  { "WURLITZER" };
-    juce::TextButton  rhodesButton     { "RHODES" };
+    juce::TextButton  wurlitzerButton  { "WURLI" };
+    juce::TextButton  rhodesButton     { "ROADS" };
     Preset            currentPreset    { Preset::Wurlitzer };
 
     // Knob controls
