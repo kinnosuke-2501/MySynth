@@ -66,6 +66,9 @@ static const PresetData kPresetRhodes {
 
 MainComponent::MainComponent()
 {
+    // Apply vintage look to this component and all children
+    setLookAndFeel(&vintageTheme);
+
     synthesiser.addSound(new ElectricPianoSound());
     for (int i = 0; i < kNumVoices; ++i)
     {
@@ -74,62 +77,53 @@ MainComponent::MainComponent()
         synthesiser.addVoice(voice);
     }
 
-    titleLabel.setText("Electric Piano", juce::dontSendNotification);
-    titleLabel.setFont(juce::Font(juce::FontOptions{}.withHeight(36.0f).withStyle("Bold")));
-    titleLabel.setColour(juce::Label::textColourId, juce::Colours::white);
-    titleLabel.setJustificationType(juce::Justification::centred);
+    // ---- Title ----
+    titleLabel.setText("ELECTRIC PIANO", juce::dontSendNotification);
+    titleLabel.setFont(juce::Font(juce::FontOptions{}.withHeight(24.0f).withStyle("Bold")));
+    titleLabel.setJustificationType(juce::Justification::centredLeft);
     addAndMakeVisible(titleLabel);
 
+    // ---- Status ----
     statusLabel.setText("Audio: starting...  |  MIDI: scanning...", juce::dontSendNotification);
-    statusLabel.setFont(juce::Font(juce::FontOptions{}.withHeight(13.0f)));
-    statusLabel.setColour(juce::Label::textColourId, juce::Colour(0xff00cc88));
-    statusLabel.setJustificationType(juce::Justification::centred);
+    statusLabel.setFont(juce::Font(juce::FontOptions{}.withHeight(11.0f)));
+    statusLabel.setColour(juce::Label::textColourId, juce::Colour(VintageLookAndFeel::kColourTextDim));
+    statusLabel.setJustificationType(juce::Justification::centredLeft);
     addAndMakeVisible(statusLabel);
 
-    hintLabel.setText("Play with a MIDI keyboard  |  Sustain pedal (CC#64) supported  |  FX: Chorus + Tremolo + Reverb", juce::dontSendNotification);
-    hintLabel.setFont(juce::Font(juce::FontOptions{}.withHeight(13.0f)));
-    hintLabel.setColour(juce::Label::textColourId, juce::Colour(0xff888888));
-    hintLabel.setJustificationType(juce::Justification::centred);
-    addAndMakeVisible(hintLabel);
+    // hintLabel not shown in vintage layout
+    addChildComponent(hintLabel);
 
-    settingsButton.setColour(juce::TextButton::buttonColourId, juce::Colour(0xff2a2a4a));
-    settingsButton.setColour(juce::TextButton::textColourOffId, juce::Colours::lightgrey);
+    // ---- Buttons ----
     settingsButton.onClick = [this]
     {
         auto* selector = new juce::AudioDeviceSelectorComponent(
             deviceManager, 0, 0, 0, 2, true, false, false, false);
         selector->setSize(450, 300);
         juce::DialogWindow::showDialog("Audio & MIDI Settings", selector, nullptr,
-                                       juce::Colours::darkgrey, true);
+                                       juce::Colour(VintageLookAndFeel::kColourPanel), true);
     };
     addAndMakeVisible(settingsButton);
 
-    // 全音停止ボタン: 音が止まらなくなったときに使う
-    panicButton.setColour(juce::TextButton::buttonColourId, juce::Colour(0xff660000));
-    panicButton.setColour(juce::TextButton::textColourOffId, juce::Colours::white);
+    panicButton.setColour(juce::TextButton::buttonColourId,  juce::Colour(0xff5a1010));
+    panicButton.setColour(juce::TextButton::textColourOffId, juce::Colour(VintageLookAndFeel::kColourText));
     panicButton.onClick = [this]
     {
-        synthesiser.allNotesOff(0, false);  // 全チャンネル、テールオフなしで即停止
+        synthesiser.allNotesOff(0, false);
         activeNoteCount.set(0);
     };
     addAndMakeVisible(panicButton);
 
-    // ---- Preset buttons ----
-    auto stylePresetBtn = [&](juce::TextButton& btn, bool active)
-    {
-        btn.setColour(juce::TextButton::buttonColourId,
-                      active ? juce::Colour(0xff006644) : juce::Colour(0xff2a2a4a));
-        btn.setColour(juce::TextButton::textColourOffId, juce::Colours::white);
-    };
-    stylePresetBtn(wurlitzerButton, true);
-    stylePresetBtn(rhodesButton,    false);
+    // Preset buttons: use toggle state so VintageLookAndFeel can highlight the active one
+    wurlitzerButton.setClickingTogglesState(false);
+    rhodesButton.setClickingTogglesState(false);
+    wurlitzerButton.setToggleState(true,  juce::dontSendNotification);
+    rhodesButton.setToggleState(false, juce::dontSendNotification);
     addAndMakeVisible(wurlitzerButton);
     addAndMakeVisible(rhodesButton);
-
     wurlitzerButton.onClick = [this] { applyPreset(Preset::Wurlitzer); };
     rhodesButton.onClick    = [this] { applyPreset(Preset::Rhodes);    };
 
-    // ---- Knob setup ----
+    // ---- Knob helpers ----
     auto setupKnob = [&](juce::Slider& s, double lo, double hi, double def, int decimals)
     {
         s.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
@@ -137,63 +131,57 @@ MainComponent::MainComponent()
         s.setRange(lo, hi);
         s.setValue(def, juce::dontSendNotification);
         s.setNumDecimalPlacesToDisplay(decimals);
-        s.setColour(juce::Slider::rotarySliderFillColourId,    juce::Colour(0xff00cc88));
-        s.setColour(juce::Slider::rotarySliderOutlineColourId, juce::Colour(0xff2a3a5a));
-        s.setColour(juce::Slider::textBoxTextColourId,         juce::Colour(0xffaaaacc));
-        s.setColour(juce::Slider::textBoxBackgroundColourId,   juce::Colour(0xff111122));
-        s.setColour(juce::Slider::textBoxOutlineColourId,      juce::Colour(0xff2a2a4a));
         addAndMakeVisible(s);
     };
     auto setupLabel = [&](juce::Label& l, const juce::String& text)
     {
         l.setText(text, juce::dontSendNotification);
-        l.setFont(juce::Font(juce::FontOptions{}.withHeight(11.0f)));
-        l.setColour(juce::Label::textColourId, juce::Colour(0xff9999bb));
         l.setJustificationType(juce::Justification::centred);
         addAndMakeVisible(l);
     };
 
-    // Ranges use display-friendly units; callbacks convert to internal values.
-    setupKnob(sliderTremoloRate,  1.0,   8.0,   5.0,  1);
-    setupKnob(sliderTremoloDepth, 0.0,  50.0,  25.0,  0);
-    setupKnob(sliderReverbWet,    0.0,  60.0,  35.0,  0);
-    setupKnob(sliderFMDepth,      0.5,   2.0,   1.0,  2);
-    setupKnob(sliderAttack,       1.0, 200.0,   1.0,  0);
-    setupKnob(sliderRelease,     50.0, 2000.0, 400.0, 0);
-    setupKnob(sliderDrive,        0.0,   3.0,   1.2,  2);
+    // ---- SOUND section knobs ----
+    setupKnob(sliderFMDepth,  0.5,   2.0,   1.0,  2);  sliderFMDepth .setTextValueSuffix("x");
+    setupKnob(sliderAttack,   1.0, 200.0,   1.0,  0);  sliderAttack  .setTextValueSuffix("ms");
+    setupKnob(sliderRelease, 50.0, 2000.0, 400.0, 0);  sliderRelease .setTextValueSuffix("ms");
+    setupKnob(sliderDrive,    0.0,   3.0,   1.2,  2);
 
-    sliderTremoloRate .setTextValueSuffix(" Hz");
-    sliderTremoloDepth.setTextValueSuffix("%");
-    sliderReverbWet   .setTextValueSuffix("%");
-    sliderFMDepth     .setTextValueSuffix("x");
-    sliderAttack      .setTextValueSuffix("ms");
-    sliderRelease     .setTextValueSuffix("ms");
+    setupLabel(labelFMDepth,  "FM DEPTH");
+    setupLabel(labelAttack,   "ATTACK");
+    setupLabel(labelRelease,  "RELEASE");
+    setupLabel(labelDrive,    "DRIVE");
 
-    setupLabel(labelTremoloRate,  "TREMOLO RATE");
-    setupLabel(labelTremoloDepth, "TREMOLO DEPTH");
-    setupLabel(labelReverbWet,    "REVERB WET");
-    setupLabel(labelFMDepth,      "FM DEPTH");
-    setupLabel(labelAttack,       "ATTACK");
-    setupLabel(labelRelease,      "RELEASE");
-    setupLabel(labelDrive,        "DRIVE");
+    sliderFMDepth .onValueChange = [this] { synthParams.fmDepthScale = (float)sliderFMDepth .getValue(); };
+    sliderAttack  .onValueChange = [this] { synthParams.attackTime   = (float)sliderAttack  .getValue() / 1000.0f; };
+    sliderRelease .onValueChange = [this] { synthParams.releaseTime  = (float)sliderRelease .getValue() / 1000.0f; };
+    sliderDrive   .onValueChange = [this] { synthParams.driveAmount  = (float)sliderDrive   .getValue(); };
 
-    sliderTremoloRate.onValueChange  = [this] { tremoloRateHz   = (float)sliderTremoloRate.getValue(); };
+    // ---- FX section knobs ----
+    setupKnob(sliderTremoloRate,  1.0,   8.0,  5.0,  1);  sliderTremoloRate .setTextValueSuffix(" Hz");
+    setupKnob(sliderTremoloDepth, 0.0,  50.0, 25.0,  0);  sliderTremoloDepth.setTextValueSuffix("%");
+    setupKnob(sliderReverbWet,    0.0,  60.0, 35.0,  0);  sliderReverbWet   .setTextValueSuffix("%");
+    setupKnob(sliderChorus,       0.0,  50.0,  2.0,  0);  sliderChorus      .setTextValueSuffix("%");
+
+    setupLabel(labelTremoloRate,  "TREM RATE");
+    setupLabel(labelTremoloDepth, "TREM DEPTH");
+    setupLabel(labelReverbWet,    "REVERB");
+    setupLabel(labelChorus,       "CHORUS");
+
+    sliderTremoloRate .onValueChange = [this] { tremoloRateHz   = (float)sliderTremoloRate .getValue(); };
     sliderTremoloDepth.onValueChange = [this] { tremoloDepthAmt = (float)sliderTremoloDepth.getValue() / 100.0f; };
-    sliderReverbWet.onValueChange    = [this] { reverbWetAmt    = (float)sliderReverbWet.getValue()    / 100.0f;
+    sliderReverbWet   .onValueChange = [this] { reverbWetAmt    = (float)sliderReverbWet   .getValue() / 100.0f;
                                                 reverbDirty     = true; };
-    sliderFMDepth.onValueChange      = [this] { synthParams.fmDepthScale = (float)sliderFMDepth.getValue(); };
-    sliderAttack.onValueChange       = [this] { synthParams.attackTime   = (float)sliderAttack.getValue()  / 1000.0f; };
-    sliderRelease.onValueChange      = [this] { synthParams.releaseTime  = (float)sliderRelease.getValue() / 1000.0f; };
-    sliderDrive.onValueChange        = [this] { synthParams.driveAmount  = (float)sliderDrive.getValue(); };
+    sliderChorus      .onValueChange = [this] { chorusMixAmt    = (float)sliderChorus      .getValue() / 100.0f; };
 
-    setSize(700, 420);
+    setSize(800, 520);
     setAudioChannels(0, 2);
     openAllMidiInputs();
-    startTimer(200);
+    startTimer(80);   // ~12fps repaint for VU meter
 }
 
 MainComponent::~MainComponent()
 {
+    setLookAndFeel(nullptr);
     stopTimer();
     for (auto& m : midiInputs)
         m->stop();
@@ -286,13 +274,12 @@ void MainComponent::applyPreset(Preset p)
     sliderTremoloRate .setValue(d.tremoloRateHz,   juce::sendNotification);
     sliderTremoloDepth.setValue(d.tremoloDepthPct, juce::sendNotification);
     sliderReverbWet   .setValue(d.reverbWetPct,    juce::sendNotification);
+    sliderChorus      .setValue(d.chorusMixPct,    juce::sendNotification);
 
-    // Update button highlight.
+    // Toggle state drives VintageLookAndFeel button highlight.
     bool isWurl = (p == Preset::Wurlitzer);
-    wurlitzerButton.setColour(juce::TextButton::buttonColourId,
-                              isWurl ? juce::Colour(0xff006644) : juce::Colour(0xff2a2a4a));
-    rhodesButton.setColour(juce::TextButton::buttonColourId,
-                           isWurl ? juce::Colour(0xff2a2a4a) : juce::Colour(0xff006644));
+    wurlitzerButton.setToggleState( isWurl, juce::dontSendNotification);
+    rhodesButton   .setToggleState(!isWurl, juce::dontSendNotification);
 
     // Stop any hanging notes so changes take effect cleanly.
     synthesiser.allNotesOff(0, true);
@@ -463,6 +450,21 @@ void MainComponent::getNextAudioBlock(const juce::AudioSourceChannelInfo& buffer
         juce::dsp::ProcessContextReplacing<float> ctx(block);
         fxReverb.process(ctx);
     }
+
+    // VU meter: exponential-smoothed RMS (attack fast, release slow)
+    {
+        float sumSq = 0.0f;
+        const float* L = bufferToFill.buffer->getReadPointer(0);
+        for (int i = 0; i < bufferToFill.numSamples; ++i)
+        {
+            const float s = L[bufferToFill.startSample + i];
+            sumSq += s * s;
+        }
+        const float rms     = std::sqrt(sumSq / (float)juce::jmax(1, bufferToFill.numSamples));
+        const float current = vuLevel.load();
+        const float alpha   = (rms > current) ? 0.80f : 0.96f;   // fast attack, slow release
+        vuLevel.store(current * alpha + rms * (1.0f - alpha));
+    }
 }
 
 void MainComponent::releaseResources()
@@ -497,76 +499,233 @@ void MainComponent::handleIncomingMidiMessage(juce::MidiInput*, const juce::Midi
 
 void MainComponent::paint(juce::Graphics& g)
 {
-    g.fillAll(juce::Colour(0xff1a1a2e));
+    using C = VintageLookAndFeel;
+    const int W = getWidth();
+    const int H = getHeight();
 
-    // Note-active LED (green)
-    bool anyActive = activeNoteCount.get() > 0;
-    g.setColour(anyActive ? juce::Colours::limegreen : juce::Colour(0xff334433));
-    g.fillEllipse(getWidth() - 24.0f, 10.0f, 12.0f, 12.0f);
+    // ── Background ────────────────────────────────────────────────────────────
+    g.fillAll(juce::Colour(C::kColourBody));
 
-    // Sustain pedal LED (blue)
-    bool sustain = sustainPedalDown.get() != 0;
-    g.setColour(sustain ? juce::Colour(0xff44aaff) : juce::Colour(0xff223344));
-    g.fillEllipse(getWidth() - 42.0f, 10.0f, 12.0f, 12.0f);
+    // Header panel (darker walnut)
+    g.setColour(juce::Colour(C::kColourPanel));
+    g.fillRect(0, 0, W, 64);
+
+    // Header bottom edge
+    g.setColour(juce::Colour(C::kColourDivider));
+    g.fillRect(0, 63, W, 2);
+
+    // ── "ELECTRIC PIANO" vintage logo engraving ───────────────────────────────
+    // (title label is drawn by JUCE on top; this adds a subtle emboss shadow)
+    g.setColour(juce::Colour(C::kColourDivider).withAlpha(0.55f));
+    g.setFont(juce::Font(juce::FontOptions{}.withHeight(24.0f).withStyle("Bold")));
+    g.drawText("ELECTRIC PIANO", 16 + 1, 20 + 1, 280, 28, juce::Justification::centredLeft);
+
+    // ── Preset region label ───────────────────────────────────────────────────
+    g.setColour(juce::Colour(C::kColourTextDim));
+    g.setFont(juce::Font(juce::FontOptions{}.withHeight(9.0f)));
+    g.drawText("MODEL", W - 14 - 238, 8, 40, 10, juce::Justification::centredLeft);
+
+    // ── LED indicators (top-right corner) ────────────────────────────────────
+    const bool anyActive = activeNoteCount.get() > 0;
+    const bool sustain   = sustainPedalDown.get() != 0;
+    const float ledD  = 9.0f;
+    const float ledY  = 10.0f;
+    const float ledX1 = (float)(W - 14 - 9);   // rightmost: note-active (amber)
+    const float ledX2 = ledX1 - 17.0f;          // sustain (cyan/blue)
+
+    // LED halos
+    if (anyActive)
+    {
+        g.setColour(juce::Colour(C::kColourLEDOn).withAlpha(0.22f));
+        g.fillEllipse(ledX1 - 4.0f, ledY - 4.0f, ledD + 8.0f, ledD + 8.0f);
+    }
+    if (sustain)
+    {
+        g.setColour(juce::Colour(0xff00aadd).withAlpha(0.18f));
+        g.fillEllipse(ledX2 - 4.0f, ledY - 4.0f, ledD + 8.0f, ledD + 8.0f);
+    }
+
+    // LED bodies
+    g.setColour(anyActive ? juce::Colour(C::kColourLEDOn) : juce::Colour(C::kColourLEDOff));
+    g.fillEllipse(ledX1, ledY, ledD, ledD);
+    g.setColour(sustain ? juce::Colour(0xff00aadd) : juce::Colour(0xff0a2030));
+    g.fillEllipse(ledX2, ledY, ledD, ledD);
+
+    // Tiny LED labels
+    g.setColour(juce::Colour(C::kColourTextDim));
+    g.setFont(juce::Font(juce::FontOptions{}.withHeight(7.5f)));
+    g.drawText("KEY", (int)ledX1 - 2, (int)(ledY + ledD + 1), 14, 8, juce::Justification::centred);
+    g.drawText("SUS", (int)ledX2 - 2, (int)(ledY + ledD + 1), 14, 8, juce::Justification::centred);
+
+    // ── Section panel backgrounds ─────────────────────────────────────────────
+    const int kSectionTop = 66;
+    const int kSectionH   = 190;
+    const int kDivX       = W * 54 / 100;
+
+    // Subtle inner glow border around sections
+    g.setColour(juce::Colour(C::kColourDivider).withAlpha(0.45f));
+    g.drawRect(14, kSectionTop, kDivX - 20, kSectionH, 1);
+    g.drawRect(kDivX + 6, kSectionTop, W - kDivX - 20, kSectionH, 1);
+
+    // Section title labels
+    g.setColour(juce::Colour(C::kColourTextDim));
+    g.setFont(juce::Font(juce::FontOptions{}.withHeight(9.5f)));
+    g.drawText("SOUND", 20, kSectionTop + 5, 50, 11, juce::Justification::centredLeft);
+    g.drawText("FX",    kDivX + 12, kSectionTop + 5, 30, 11, juce::Justification::centredLeft);
+
+    // Vertical divider between SOUND and FX
+    g.setColour(juce::Colour(C::kColourDivider));
+    g.fillRect(kDivX, kSectionTop + 16, 1, kSectionH - 20);
+
+    // ── Chassis decorative area ───────────────────────────────────────────────
+    const int chassisTop = kSectionTop + kSectionH + 8;
+    const int chassisH   = H - chassisTop - 56;
+    if (chassisH > 20)
+    {
+        // Inset recessed panel
+        g.setColour(juce::Colour(0xff161410));
+        g.fillRect(14, chassisTop, W - 28, chassisH);
+        g.setColour(juce::Colour(C::kColourDivider).withAlpha(0.30f));
+        g.drawRect(14, chassisTop, W - 28, chassisH, 1);
+
+        // Model name plate
+        const juce::String modelName = (currentPreset == Preset::Wurlitzer)
+                                        ? "WURLITZER 200A"
+                                        : "RHODES MARK II";
+        g.setColour(juce::Colour(C::kColourKnobCap).withAlpha(0.55f));
+        g.setFont(juce::Font(juce::FontOptions{}.withHeight(18.0f).withStyle("Bold")));
+        g.drawText(modelName, 14, chassisTop + chassisH / 2 - 14, W - 28, 28,
+                   juce::Justification::centred);
+
+        // Decorative vent lines
+        g.setColour(juce::Colour(C::kColourDivider).withAlpha(0.25f));
+        const int ventY0 = chassisTop + 8;
+        for (int v = 0; v < 4; ++v)
+        {
+            int vy = ventY0 + v * 5;
+            if (vy + 2 < chassisTop + chassisH - 8)
+                g.fillRect(W / 2 - 60, vy, 120, 2);
+        }
+    }
+
+    // ── VU meter ──────────────────────────────────────────────────────────────
+    const int vuY  = H - 50;
+    const int vuX  = 14;
+    const int vuW  = W - 28;
+    const int vuH  = 12;
+
+    // dB tick marks (above bar)
+    g.setFont(juce::Font(juce::FontOptions{}.withHeight(8.0f)));
+    for (float db : { -30.0f, -20.0f, -12.0f, -6.0f, -3.0f })
+    {
+        const float t  = juce::jmap(db, -42.0f, 0.0f, 0.0f, 1.0f);
+        const int   tx = vuX + (int)(t * (float)vuW);
+        g.setColour(juce::Colour(C::kColourTextDim).withAlpha(0.45f));
+        g.fillRect(tx, vuY - 6, 1, 4);
+        g.setColour(juce::Colour(C::kColourTextDim).withAlpha(0.6f));
+        g.drawText(juce::String((int)db), tx - 8, vuY - 16, 20, 10,
+                   juce::Justification::centred);
+    }
+    // 0 dB marker (brighter)
+    {
+        const int tx = vuX + vuW;
+        g.setColour(juce::Colour(C::kColourLEDOn).withAlpha(0.55f));
+        g.fillRect(tx - 1, vuY - 6, 1, 4);
+        g.setColour(juce::Colour(C::kColourLEDOn).withAlpha(0.8f));
+        g.drawText("0", tx - 8, vuY - 16, 20, 10, juce::Justification::centred);
+    }
+
+    // Bar background
+    g.setColour(juce::Colour(C::kColourTrackBg));
+    g.fillRoundedRectangle((float)vuX, (float)vuY, (float)vuW, (float)vuH, 3.0f);
+
+    // Bar fill with green→amber→red gradient
+    const float levelRMS   = vuLevel.load();
+    const float levelDB    = 20.0f * std::log10(juce::jmax(levelRMS, 1e-5f));
+    const float normalised = juce::jlimit(0.0f, 1.0f,
+                                           juce::jmap(levelDB, -42.0f, 0.0f, 0.0f, 1.0f));
+    if (normalised > 0.001f)
+    {
+        const float fillW = normalised * (float)vuW;
+        juce::ColourGradient grad (juce::Colour(0xff3aaa1a), (float)vuX,        0.0f,
+                                    juce::Colour(0xffff2200), (float)(vuX + vuW), 0.0f, false);
+        grad.addColour(0.65, juce::Colour(C::kColourTrackFill));
+        grad.addColour(0.85, juce::Colour(C::kColourLEDOn));
+        g.setGradientFill(grad);
+        g.fillRoundedRectangle((float)vuX, (float)vuY, fillW, (float)vuH, 3.0f);
+    }
+
+    // "VU" label
+    g.setColour(juce::Colour(C::kColourTextDim));
+    g.setFont(juce::Font(juce::FontOptions{}.withHeight(9.0f)));
+    g.drawText("VU", vuX, vuY - 16, 18, 10, juce::Justification::centredLeft);
 }
 
 void MainComponent::resized()
 {
-    auto area = getLocalBounds().reduced(20);
+    const int W = getWidth();
+    const int H = getHeight();
 
-    // Title row: label on the left, preset buttons on the right
+    // ── Header row (y 0–64) ───────────────────────────────────────────────────
+    // Title label (left)
+    titleLabel.setBounds(16, 18, 260, 32);
+
+    // Preset buttons (right side of header)
+    const int btnY = 16, btnH = 32;
+    rhodesButton   .setBounds(W - 14 - 96,       btnY, 96,  btnH);
+    wurlitzerButton.setBounds(W - 14 - 96 - 110, btnY, 106, btnH);
+
+    // Settings button (bottom-right)
+    settingsButton.setBounds(W - 14 - 110, H - 44, 110, 34);
+
+    // Panic button (bottom-left)
+    panicButton.setBounds(14, H - 44, 78, 34);
+
+    // Status label (bottom, left of center)
+    statusLabel.setBounds(100, H - 40, W / 2, 14);
+
+    // ── Knob sections ─────────────────────────────────────────────────────────
+    const int kSectionTop = 66;
+    const int kDivX       = W * 54 / 100;   // divider x between SOUND and FX sections
+    const int kLabelH     = 14;
+    const int kKnobH      = 110;            // slider bounds height (knob + text box)
+    const int kSectionPad = 16;             // top padding inside section (below section title)
+
+    // SOUND section: 4 knobs (FM DEPTH, ATTACK, RELEASE, DRIVE)
     {
-        auto row = area.removeFromTop(50);
-        rhodesButton.setBounds(row.removeFromRight(100).reduced(0, 10));
-        row.removeFromRight(6);
-        wurlitzerButton.setBounds(row.removeFromRight(120).reduced(0, 10));
-        titleLabel.setBounds(row);
-    }
-    area.removeFromTop(8);
-    statusLabel.setBounds(area.removeFromTop(20));
-    area.removeFromTop(12);
-    hintLabel.setBounds(area.removeFromTop(20));
-    area.removeFromTop(16);
+        const int secW  = kDivX - 14 - 8;          // section width
+        const int cellW = secW / 4;
+        int x = 14 + 4;
+        const int y0 = kSectionTop + kSectionPad;
 
-    const int kLabelH = 14;
-    const int kKnobH  = 80;
-    const int cellW   = area.getWidth() / 4;
-
-    // Row 1: TremoloRate | TremoloDepth | ReverbWet | FMDepth
-    {
-        auto row = area.removeFromTop(kLabelH + kKnobH);
         auto placeKnob = [&](juce::Label& lbl, juce::Slider& sld)
         {
-            auto cell = row.removeFromLeft(cellW);
-            lbl.setBounds(cell.removeFromTop(kLabelH));
-            sld.setBounds(cell.reduced(10, 0));
+            lbl.setBounds(x, y0,            cellW, kLabelH);
+            sld.setBounds(x, y0 + kLabelH,  cellW, kKnobH);
+            x += cellW;
+        };
+        placeKnob(labelFMDepth,  sliderFMDepth);
+        placeKnob(labelAttack,   sliderAttack);
+        placeKnob(labelRelease,  sliderRelease);
+        placeKnob(labelDrive,    sliderDrive);
+    }
+
+    // FX section: 4 knobs (TREM RATE, TREM DEPTH, REVERB, CHORUS)
+    {
+        const int secW  = W - kDivX - 6 - 14;
+        const int cellW = secW / 4;
+        int x = kDivX + 8;
+        const int y0 = kSectionTop + kSectionPad;
+
+        auto placeKnob = [&](juce::Label& lbl, juce::Slider& sld)
+        {
+            lbl.setBounds(x, y0,            cellW, kLabelH);
+            sld.setBounds(x, y0 + kLabelH,  cellW, kKnobH);
+            x += cellW;
         };
         placeKnob(labelTremoloRate,  sliderTremoloRate);
         placeKnob(labelTremoloDepth, sliderTremoloDepth);
         placeKnob(labelReverbWet,    sliderReverbWet);
-        placeKnob(labelFMDepth,      sliderFMDepth);
+        placeKnob(labelChorus,       sliderChorus);
     }
-
-    area.removeFromTop(10);
-
-    // Row 2: Attack | Release | Drive — 3 knobs centered in the 4-cell width.
-    // Skip cellW/2 on each side so 3×cellW is perfectly centered in 4×cellW.
-    {
-        auto row = area.removeFromTop(kLabelH + kKnobH);
-        row.removeFromLeft(cellW / 2);
-        auto placeKnob = [&](juce::Label& lbl, juce::Slider& sld)
-        {
-            auto cell = row.removeFromLeft(cellW);
-            lbl.setBounds(cell.removeFromTop(kLabelH));
-            sld.setBounds(cell.reduced(10, 0));
-        };
-        placeKnob(labelAttack,  sliderAttack);
-        placeKnob(labelRelease, sliderRelease);
-        placeKnob(labelDrive,   sliderDrive);
-    }
-
-    auto bottom = getLocalBounds().removeFromBottom(40).reduced(8);
-    panicButton.setBounds(bottom.removeFromLeft(80));
-    bottom.removeFromLeft(8);
-    settingsButton.setBounds(bottom.removeFromRight(110));
 }

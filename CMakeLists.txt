@@ -18,6 +18,7 @@ target_sources(MySynth PRIVATE
     Source/Main.cpp
     Source/MainComponent.cpp
     Source/SynthVoice.cpp
+    Source/VintageLookAndFeel.cpp
 )
 
 target_compile_features(MySynth PRIVATE cxx_std_17)

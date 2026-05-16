@@ -1,6 +1,7 @@
 #pragma once
 #include <JuceHeader.h>
 #include "SynthVoice.h"
+#include "VintageLookAndFeel.h"
 
 class MainComponent : public juce::AudioAppComponent,
                       public juce::MidiInputCallback,   // public に変更: キャストを確実に通す
@@ -79,10 +80,17 @@ private:
     juce::Slider sliderTremoloRate, sliderTremoloDepth;
     juce::Slider sliderReverbWet,   sliderFMDepth;
     juce::Slider sliderAttack,      sliderRelease,   sliderDrive;
+    juce::Slider sliderChorus;
 
     juce::Label  labelTremoloRate,  labelTremoloDepth;
     juce::Label  labelReverbWet,    labelFMDepth;
     juce::Label  labelAttack,       labelRelease,    labelDrive;
+    juce::Label  labelChorus;
+
+    // VU meter level (RMS, written from audio thread)
+    std::atomic<float> vuLevel { 0.0f };
+
+    VintageLookAndFeel vintageTheme;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MainComponent)
 };
