@@ -27,6 +27,18 @@ float renderCarrierSample(double angle, float modulation,
     const float norm = 1.0f + std::abs(h2) + std::abs(h3) + std::abs(h5);
     return harmonicSum / norm;
 }
+
+float applyReedBuzz(float sample, float driveAmount, float mix)
+{
+    mix = juce::jlimit(0.0f, 1.0f, mix);
+    if (mix <= 0.0f || driveAmount <= 0.0f)
+        return sample;
+
+    const float drive = 1.0f + driveAmount * 2.0f;
+    const float clipped = std::tanh(sample * drive) / std::tanh(drive);
+    const float oddEmphasis = 0.82f * clipped + 0.18f * clipped * clipped * clipped;
+    return juce::jmap(mix, sample, oddEmphasis);
+}
 }
 
 bool ElectricPianoVoice::canPlaySound(juce::SynthesiserSound* sound)
@@ -34,12 +46,27 @@ bool ElectricPianoVoice::canPlaySound(juce::SynthesiserSound* sound)
     return dynamic_cast<ElectricPianoSound*>(sound) != nullptr;
 }
 
+void ElectricPianoVoice::updateOscillatorDeltas() noexcept
+{
+    if (baseFrequencyHz <= 0.0 || getSampleRate() <= 0.0)
+        return;
+
+    const double freq = baseFrequencyHz * (double) pitchBendRatio;
+    const double baseDelta = freq / getSampleRate() * juce::MathConstants<double>::twoPi;
+    const double detuneRatio = std::pow(2.0, (double) currentDetuneCents / 1200.0);
+
+    carrierDeltaL  = baseDelta / detuneRatio;
+    carrierDeltaR  = baseDelta * detuneRatio;
+    modulatorDelta = baseDelta * (double) currentModRatio;
+}
+
 void ElectricPianoVoice::startNote(int midiNoteNumber, float velocity,
-                                    juce::SynthesiserSound*, int)
+                                    juce::SynthesiserSound*, int currentPitchWheelPosition)
 {
     carrierAngleL  = 0.0;
     carrierAngleR  = 0.0;
     modulatorAngle = 0.0;
+    pitchBendRatio = 1.0f;
     level = velocity;
 
     // Read all preset + user params from the shared atomic struct.
@@ -65,6 +92,7 @@ void ElectricPianoVoice::startNote(int midiNoteNumber, float velocity,
     const float velLevel = std::pow(velocity, velPow);
     const float velTone  = shapeVelocityForTone(velocity, velToneMid, velToneSharp);
     level = velLevel;
+    buzzExcitation = velTone;
 
     const float highNoteFactor = juce::jlimit(0.0f, 1.0f, ((float) midiNoteNumber - 72.0f) / 24.0f);
     const float transientDecay = juce::jmap(highNoteFactor, mDecay, mDecay * 0.6f);
@@ -74,13 +102,10 @@ void ElectricPianoVoice::startNote(int midiNoteNumber, float velocity,
     float keyScale    = juce::jlimit(0.6f, 1.4f, 1.0f - ksCoeff * (float)(midiNoteNumber - 60));
     modulationDepth   = (fmLow + velTone * fmRange) * depthScale * keyScale * transientBoost;
 
-    double freq        = juce::MidiMessage::getMidiNoteInHertz(midiNoteNumber);
-    double baseDelta   = freq / getSampleRate() * juce::MathConstants<double>::twoPi;
-    double detuneRatio = std::pow(2.0, (double)detuneCents / 1200.0);
-
-    carrierDeltaL  = baseDelta / detuneRatio;
-    carrierDeltaR  = baseDelta * detuneRatio;
-    modulatorDelta = baseDelta * (double)modRatio;
+    baseFrequencyHz    = juce::MidiMessage::getMidiNoteInHertz(midiNoteNumber);
+    currentModRatio    = modRatio;
+    currentDetuneCents = detuneCents;
+    pitchWheelMoved(currentPitchWheelPosition);
 
     carrierEnv.setSampleRate(getSampleRate());
     modulatorEnv.setSampleRate(getSampleRate());
@@ -92,6 +117,16 @@ void ElectricPianoVoice::startNote(int midiNoteNumber, float velocity,
     // Noise burst: hammer-on-reed/tine physical impact transient (~20ms decay).
     noiseBurstDecay = (float)std::pow(0.001, 1.0 / (getSampleRate() * 0.020));
     noiseBurstLevel = velTone * noiseAmt * juce::jmap(highNoteFactor, 1.0f, 1.25f);
+}
+
+void ElectricPianoVoice::pitchWheelMoved(int newPitchWheelValue)
+{
+    const float bendRangeSemitones = params ? params->pitchBendRange.load() : 2.0f;
+    const double normalized = juce::jlimit(-1.0, 1.0,
+                                           ((double) newPitchWheelValue - 8192.0) / 8192.0);
+    const double semitones = normalized * (double) bendRangeSemitones;
+    pitchBendRatio = (float) std::pow(2.0, semitones / 12.0);
+    updateOscillatorDeltas();
 }
 
 void ElectricPianoVoice::stopNote(float, bool allowTailOff)
@@ -107,8 +142,12 @@ void ElectricPianoVoice::stopNote(float, bool allowTailOff)
         modulatorEnv.reset();
         clearCurrentNote();
         carrierDeltaL = carrierDeltaR = 0.0;
+        modulatorDelta = 0.0;
+        baseFrequencyHz = 0.0;
+        pitchBendRatio = 1.0f;
     }
     noiseBurstLevel = 0.0f;
+    buzzExcitation = 0.0f;
 }
 
 void ElectricPianoVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
@@ -123,9 +162,8 @@ void ElectricPianoVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
     const float h2    = params ? params->carrierH2.load()    : 0.08f;
     const float h3    = params ? params->carrierH3.load()    : 0.10f;
     const float h5    = params ? params->carrierH5.load()    : 0.04f;
-    const float drive = params ? params->driveAmount.load()  : 1.0f;
-    // Normalization: f(1, drive) = 1 so we preserve peak level.
-    const float driveNorm = (drive > 0.001f) ? 1.0f / (1.0f + drive) : 1.0f;
+    const float buzzDrive = params ? params->satDrive.load()   : 1.0f;
+    const float drive     = params ? params->driveAmount.load(): 1.0f;
 
     while (--numSamples >= 0)
     {
@@ -137,6 +175,11 @@ void ElectricPianoVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
         float carrierL = renderCarrierSample(carrierAngleL, mod, h2, h3, h5);
         float carrierR = renderCarrierSample(carrierAngleR, mod, h2, h3, h5);
 
+        const float buzzMix = juce::jlimit(0.0f, 1.0f,
+                                           buzzExcitation * (0.35f + modEnv * 0.9f));
+        carrierL = applyReedBuzz(carrierL, buzzDrive, buzzMix);
+        carrierR = applyReedBuzz(carrierR, buzzDrive, buzzMix);
+
         // Soft saturation: f(x) = x / (1 + |x|*drive) * (1+drive)
         // Clamps peaks while boosting mid-signal → warm, organic texture.
         float satL = (drive > 0.001f) ? carrierL / (1.0f + std::abs(carrierL) * drive) * (1.0f + drive)
@@ -146,7 +189,6 @@ void ElectricPianoVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
 
         float sampleL = carEnv * level * satL * kGlobalLevel;
         float sampleR = carEnv * level * satR * kGlobalLevel;
-        (void)driveNorm;
 
         if (noiseBurstLevel > 0.0002f)
         {
@@ -169,6 +211,9 @@ void ElectricPianoVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
         {
             clearCurrentNote();
             carrierDeltaL = carrierDeltaR = 0.0;
+            modulatorDelta = 0.0;
+            baseFrequencyHz = 0.0;
+            pitchBendRatio = 1.0f;
             break;
         }
     }

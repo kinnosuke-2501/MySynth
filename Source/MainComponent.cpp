@@ -351,6 +351,7 @@ void MainComponent::getNextAudioBlock(const juce::AudioSourceChannelInfo& buffer
 
     juce::MidiBuffer incomingMidi;
     midiCollector.removeNextBlockOfMessages(incomingMidi, bufferToFill.numSamples);
+
     synthesiser.renderNextBlock(*bufferToFill.buffer, incomingMidi,
                                 bufferToFill.startSample, bufferToFill.numSamples);
 

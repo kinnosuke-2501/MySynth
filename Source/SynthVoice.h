@@ -30,6 +30,7 @@ struct SynthParams
     std::atomic<float> velPow    { 2.0f };   // velocity power curve for output level
     std::atomic<float> velToneMidpoint  { 0.58f }; // midpoint for tone-brightening S-curve
     std::atomic<float> velToneSharpness { 9.0f };  // steepness for tone-brightening S-curve
+    std::atomic<float> pitchBendRange   { 2.0f };  // pitch bend range in semitones
 
     // ---- User params (knob-controlled) ----
     std::atomic<float> fmDepthScale { 1.0f };   // 0.5–2.0: multiplier on velocity→FM depth
@@ -66,13 +67,15 @@ public:
 
     void stopNote(float velocity, bool allowTailOff) override;
 
-    void pitchWheelMoved(int) override {}
+    void pitchWheelMoved(int newPitchWheelValue) override;
     void controllerMoved(int, int) override {}
 
     void renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
                          int startSample, int numSamples) override;
 
 private:
+    void updateOscillatorDeltas() noexcept;
+
     SynthParams* params = nullptr;
 
     juce::ADSR carrierEnv;
@@ -86,9 +89,14 @@ private:
 
     double modulatorAngle  = 0.0;
     double modulatorDelta  = 0.0;   // 2× carrier freq
+    double baseFrequencyHz = 0.0;
+    float  currentModRatio = 2.0f;
+    float  currentDetuneCents = 3.0f;
+    float  pitchBendRatio = 1.0f;
 
     float modulationDepth  = 0.0f;
     float level            = 0.0f;
+    float buzzExcitation   = 0.0f;
 
     // Noise burst: physical hammer-on-reed "clack" transient
     float noiseBurstLevel  = 0.0f;

@@ -8,7 +8,7 @@
 
 ---
 
-## 現在の実装状態 (Phase 6-1 一部完了)
+## 現在の実装状態 (Phase 6-3 一部完了)
 
 ### ビルド・起動
 
@@ -80,6 +80,21 @@ Modulator (倍音エンベロープ): attack=0.5ms, decay=120ms, sustain=0%, rel
 | 高音域補正 | C5 以上で modulator decay を短縮し、トランジェントを少し強める |
 | ベロシティ音色カーブ | 音量は従来の `velPow` を維持しつつ、FM depth とノイズ量は logistic ベースの S字カーブで制御 |
 
+**Phase 6-2 追加実装 (2026-05-17):**
+
+| 項目 | 内容 |
+| --- | --- |
+| Wurlitzer buzz | `satDrive` をプリセット側の reed clipping drive として使用し、アタック時だけ強く出る tanh ベースの buzz 段を追加 |
+| ダイナミクス | buzz は `modulatorEnv` と note-on velocity から計算した `buzzMix` で制御。強打時に bark が増し、サステインでは薄くなる |
+
+**Phase 6-3 追加実装 (2026-05-17):**
+
+| 項目 | 内容 |
+| --- | --- |
+| Pitch bend | `ElectricPianoVoice::pitchWheelMoved()` を実装し、現在ノートの基準周波数から oscillator delta を再計算 |
+| レンジ | デフォルトは `pitchBendRange = 2.0f` で ±2 半音。UI 追加前の内部パラメータとして保持 |
+| note-on同期 | `startNote(..., currentPitchWheelPosition)` から現在の wheel 値を適用し、bend した状態で押したノートも正しく追従 |
+
 ---
 
 ## 現在のUI構成
@@ -135,4 +150,4 @@ Modulator (倍音エンベロープ): attack=0.5ms, decay=120ms, sustain=0%, rel
 | Phase 3 | UIノブ追加 (Tremolo/Reverb/FM/ADSR) | ✅ 完了 |
 | Phase 4 | Wurlitzer / Rhodes プリセット切り替え | ✅ 完了 |
 | Phase 5 | サステインペダル対応 + 視覚インジケータ | ✅ 完了 |
-| **Phase 6** | **音色ブラッシュアップ (倍音、ノンリニア特性)** | 進行中 (6-1 一部完了) |
+| **Phase 6** | **音色ブラッシュアップ (倍音、ノンリニア特性)** | 進行中 (6-3 一部完了) |
