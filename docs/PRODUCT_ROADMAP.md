@@ -25,7 +25,7 @@
 
 | カテゴリ | 問題 | 優先度 |
 |---|---|---|
-| **音色** | Phase 6 は主要項目を実装済み。残タスクは pedal noise の質感調整 | P0 |
+| **音色** | Phase 6 は主要項目を実装済み。残タスクは Wurlitzer/Rhodes の質感調整 | P0 |
 | **UI/UX** | 固定サイズ 700×420、ビンテージ感ゼロ、情報密度低 | P0 |
 | **状態永続化** | 起動ごとにパラメータがリセットされる | P1 |
 | **プリセット管理** | 保存・読み込み・ユーザープリセット なし | P1 |
@@ -71,7 +71,8 @@
 - 6-3 の初回実装として、pitch bend を ±2 半音で反映
 - 6-4 の初回実装として、Rhodes の note-off afterglow を追加
 - 6-4 の第2段として、Rhodes のサステインペダル中 sympathetic resonance を追加
-- 次の着手点は pedal noise の質感調整、または Phase 7 UI/UX
+- 6-4 の第3段として、サステインペダル down/up に mechanical pedal noise を追加
+- 次の着手点は Wurlitzer / Rhodes の質感追い込み、または Phase 7 UI/UX
 
 #### 6-1. 倍音構造の改善
 

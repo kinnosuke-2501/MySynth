@@ -305,6 +305,12 @@ void MainComponent::prepareToPlay(int samplesPerBlockExpected, double sampleRate
     currentSampleRate = sampleRate;
     synthesiser.setCurrentPlaybackSampleRate(sampleRate);
     midiCollector.reset(sampleRate);
+    pedalNoiseEnv = 0.0f;
+    pedalNoiseDecay = 0.0f;
+    pedalNoiseFilter = 0.0f;
+    pedalNoiseDirection = 0.0f;
+    pedalNoiseThumpPhase = 0.0;
+    pedalNoiseThumpDelta = 0.0;
 
     juce::dsp::ProcessSpec spec;
     spec.sampleRate       = sampleRate;
@@ -401,6 +407,55 @@ void MainComponent::getNextAudioBlock(const juce::AudioSourceChannelInfo& buffer
         tremoloPhase = std::fmod(tremoloPhase, juce::MathConstants<double>::twoPi);
     }
 
+    // Pedal noise: short mechanical thunk/click when sustain pedal changes state.
+    // Added after tremolo so the effect doesn't wobble with the amp modulation.
+    {
+        const int pedalNoiseEvent = pendingPedalNoise.exchange(0);
+        if (pedalNoiseEvent != 0 && currentSampleRate > 0.0)
+        {
+            const bool pedalDownEvent = pedalNoiseEvent > 0;
+            pedalNoiseDirection = pedalDownEvent ? 1.0f : -1.0f;
+            pedalNoiseEnv = pedalDownEvent ? 0.020f : 0.014f;
+
+            const float decaySeconds = pedalDownEvent ? 0.055f : 0.032f;
+            pedalNoiseDecay = (float) std::pow(0.001f, 1.0f / ((float) currentSampleRate * decaySeconds));
+
+            const float thunkFrequency = pedalDownEvent ? 180.0f : 320.0f;
+            pedalNoiseThumpDelta = (double) thunkFrequency / currentSampleRate
+                                   * juce::MathConstants<double>::twoPi;
+        }
+
+        if (pedalNoiseEnv > 0.00005f)
+        {
+            auto* L = bufferToFill.buffer->getWritePointer(0);
+            auto* R = (bufferToFill.buffer->getNumChannels() >= 2)
+                      ? bufferToFill.buffer->getWritePointer(1) : nullptr;
+
+            for (int i = 0; i < bufferToFill.numSamples; ++i)
+            {
+                const int sampleIndex = bufferToFill.startSample + i;
+                const float noise = pedalNoiseRng.nextFloat() * 2.0f - 1.0f;
+                pedalNoiseFilter = 0.84f * pedalNoiseFilter + 0.16f * noise;
+
+                const float thunk = (float) std::sin(pedalNoiseThumpPhase);
+                const float click = noise - pedalNoiseFilter;
+                const float mechanical = pedalNoiseDirection > 0.0f
+                                             ? 0.60f * thunk + 0.40f * pedalNoiseFilter
+                                             : 0.22f * thunk + 0.78f * click;
+                const float pedalSample = pedalNoiseEnv * mechanical;
+
+                L[sampleIndex] += pedalSample;
+                if (R != nullptr)
+                    R[sampleIndex] += pedalSample * 0.96f;
+
+                pedalNoiseEnv *= pedalNoiseDecay;
+                pedalNoiseThumpPhase += pedalNoiseThumpDelta;
+            }
+
+            pedalNoiseThumpPhase = std::fmod(pedalNoiseThumpPhase, juce::MathConstants<double>::twoPi);
+        }
+    }
+
     {
         auto block = juce::dsp::AudioBlock<float>(*bufferToFill.buffer)
                          .getSubBlock((size_t)bufferToFill.startSample,
@@ -428,7 +483,14 @@ void MainComponent::handleIncomingMidiMessage(juce::MidiInput*, const juce::Midi
     else if (message.isNoteOff() || (message.isNoteOn() && message.getVelocity() == 0))
         activeNoteCount.set(juce::jmax(0, activeNoteCount.get() - 1));
     else if (message.isController() && message.getControllerNumber() == 64)
-        sustainPedalDown.set(message.getControllerValue() >= 64 ? 1 : 0);
+    {
+        const int newPedalState = message.getControllerValue() >= 64 ? 1 : 0;
+        const int previousPedalState = sustainPedalDown.get();
+        sustainPedalDown.set(newPedalState);
+
+        if (newPedalState != previousPedalState)
+            pendingPedalNoise = newPedalState != 0 ? 1 : -1;
+    }
 }
 
 // ---- Component ----

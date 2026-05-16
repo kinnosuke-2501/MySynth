@@ -108,7 +108,8 @@ Modulator (倍音エンベロープ): attack=0.5ms, decay=120ms, sustain=0%, rel
 | Rhodes afterglow | `stopNote()` で note-off 時に bell tail を起動し、`renderNextBlock()` で 4次倍音ベースの高域 tail を減衰させる |
 | プリセット差分 | Wurlitzer は `afterglowAmount=0`、Rhodes は note-off 後の shimmer が乗るよう `afterglowAmount=0.22`, `afterglowDecay=0.24s` |
 | Sympathetic resonance | サステインペダル中のみ、Rhodes に薄い tonebar/body 共鳴を追加。キーを離した後の sustain tail で少し目立つように制御 |
-| 未実装 | pedal noise の専用ノイズイベントは未追加 |
+| Pedal noise | `MainComponent` で CC#64 のエッジを検出し、pedal down は低めの thunk、pedal up は短い click をグローバルに加算 |
+| 未実装 | pedal noise は初回実装のみ。質感の追い込みは今後の調整対象 |
 
 ---
 

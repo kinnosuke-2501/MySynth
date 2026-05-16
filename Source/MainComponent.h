@@ -49,7 +49,16 @@ private:
     std::atomic<float> reverbWetAmt    { 0.35f };
     std::atomic<bool>  reverbDirty     { false };
     std::atomic<float> chorusMixAmt    { 0.08f };  // updated per preset
+    std::atomic<int>   pendingPedalNoise { 0 };    // +1 pedal down, -1 pedal up
     float              lastChorusMix   { -1.0f };  // tracks last applied value
+
+    float pedalNoiseEnv        { 0.0f };
+    float pedalNoiseDecay      { 0.0f };
+    float pedalNoiseFilter     { 0.0f };
+    float pedalNoiseDirection  { 0.0f };
+    double pedalNoiseThumpPhase{ 0.0 };
+    double pedalNoiseThumpDelta{ 0.0 };
+    juce::Random pedalNoiseRng;
 
     // MidiInput::openDevice で直接開いたデバイスを保持
     std::vector<std::unique_ptr<juce::MidiInput>> midiInputs;
