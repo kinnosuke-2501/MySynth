@@ -27,10 +27,17 @@ struct SynthParams
     std::atomic<float> carrierH3 { 0.10f };  // odd harmonic content for reed/tine bite
     std::atomic<float> carrierH5 { 0.04f };  // upper odd harmonic sheen
     std::atomic<float> satDrive  { 1.0f };   // soft saturation: 0=off, 1=mild, 3=heavy
+    std::atomic<float> reedAsymmetry { 0.0f }; // Wurlitzer-style asymmetric reed shaping
+    std::atomic<float> barkBloom     { 0.0f }; // transient harmonic bloom on note attack
     std::atomic<float> velPow    { 2.0f };   // velocity power curve for output level
     std::atomic<float> velToneMidpoint  { 0.58f }; // midpoint for tone-brightening S-curve
     std::atomic<float> velToneSharpness { 9.0f };  // steepness for tone-brightening S-curve
     std::atomic<float> pitchBendRange   { 2.0f };  // pitch bend range in semitones
+    std::atomic<float> afterglowAmount  { 0.0f };  // note-off bell tail level (Rhodes only)
+    std::atomic<float> afterglowDecay   { 0.18f }; // note-off bell tail decay time in seconds
+    std::atomic<float> afterglowHarmonic{ 4.0f };  // bell tail harmonic multiplier
+    std::atomic<float> resonanceAmount  { 0.0f };  // sustain-pedal sympathetic resonance level
+    std::atomic<float> resonanceHarmonic{ 3.0f };  // sustain-pedal resonance harmonic multiplier
 
     // ---- User params (knob-controlled) ----
     std::atomic<float> fmDepthScale { 1.0f };   // 0.5–2.0: multiplier on velocity→FM depth
@@ -97,6 +104,13 @@ private:
     float modulationDepth  = 0.0f;
     float level            = 0.0f;
     float buzzExcitation   = 0.0f;
+    float afterglowLevel   = 0.0f;
+    float afterglowDecay   = 0.0f;
+    float currentAfterglowAmount = 0.0f;
+    float currentAfterglowHarmonic = 4.0f;
+    float sympatheticResonance = 0.0f;
+    float currentResonanceAmount = 0.0f;
+    float currentResonanceHarmonic = 3.0f;
 
     // Noise burst: physical hammer-on-reed "clack" transient
     float noiseBurstLevel  = 0.0f;

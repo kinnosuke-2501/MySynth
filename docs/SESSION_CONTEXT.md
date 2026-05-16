@@ -8,7 +8,7 @@
 
 ---
 
-## 現在の実装状態 (Phase 6-3 一部完了)
+## 現在の実装状態 (Phase 6-4 一部完了)
 
 ### ビルド・起動
 
@@ -18,7 +18,7 @@ cmake -B build -DCMAKE_BUILD_TYPE=Debug -Wno-dev
 cmake --build build --config Debug -j$(sysctl -n hw.logicalcpu)
 
 # 起動
-open "build/MySynth_artefacts/Debug/MySynth.app"
+./scripts/run_debug.sh
 ```
 
 ### ファイル構成
@@ -26,8 +26,14 @@ open "build/MySynth_artefacts/Debug/MySynth.app"
 ```text
 workspace_20260516/
 ├── CMakeLists.txt          # juce_dsp リンク済み、plist patch は cmake/patch_plist.cmake 経由
+├── docs/
+│   ├── PRODUCT_ROADMAP.md  # 品質改善ロードマップ
+│   └── SESSION_CONTEXT.md  # この引き継ぎドキュメント
 ├── cmake/
 │   └── patch_plist.cmake   # NSMidiUsageDescription を Info.plist に追記するスクリプト
+├── docs/
+│   ├── PRODUCT_ROADMAP.md
+│   └── SESSION_CONTEXT.md
 ├── JUCE/                   # git submodule (JUCE 8.x)
 ├── Source/
 │   ├── Main.cpp            # JUCEエントリポイント (変更なし)
@@ -95,6 +101,15 @@ Modulator (倍音エンベロープ): attack=0.5ms, decay=120ms, sustain=0%, rel
 | レンジ | デフォルトは `pitchBendRange = 2.0f` で ±2 半音。UI 追加前の内部パラメータとして保持 |
 | note-on同期 | `startNote(..., currentPitchWheelPosition)` から現在の wheel 値を適用し、bend した状態で押したノートも正しく追従 |
 
+**Phase 6-4 追加実装 (2026-05-17):**
+
+| 項目 | 内容 |
+| --- | --- |
+| Rhodes afterglow | `stopNote()` で note-off 時に bell tail を起動し、`renderNextBlock()` で 4次倍音ベースの高域 tail を減衰させる |
+| プリセット差分 | Wurlitzer は `afterglowAmount=0`、Rhodes は note-off 後の shimmer が乗るよう `afterglowAmount=0.22`, `afterglowDecay=0.24s` |
+| Sympathetic resonance | サステインペダル中のみ、Rhodes に薄い tonebar/body 共鳴を追加。キーを離した後の sustain tail で少し目立つように制御 |
+| 未実装 | pedal noise の専用ノイズイベントは未追加 |
+
 ---
 
 ## 現在のUI構成
@@ -150,4 +165,4 @@ Modulator (倍音エンベロープ): attack=0.5ms, decay=120ms, sustain=0%, rel
 | Phase 3 | UIノブ追加 (Tremolo/Reverb/FM/ADSR) | ✅ 完了 |
 | Phase 4 | Wurlitzer / Rhodes プリセット切り替え | ✅ 完了 |
 | Phase 5 | サステインペダル対応 + 視覚インジケータ | ✅ 完了 |
-| **Phase 6** | **音色ブラッシュアップ (倍音、ノンリニア特性)** | 進行中 (6-3 一部完了) |
+| **Phase 6** | **音色ブラッシュアップ (倍音、ノンリニア特性)** | 進行中 (6-4 一部完了) |

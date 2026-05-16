@@ -13,8 +13,11 @@ struct PresetData
     float fmDepthLow, fmDepthRange, keyScaleCoeff, noiseBurstAmt;
     float carrierH2, carrierH3, carrierH5;
     float satDrive;      // soft saturation amount
+    float reedAsymmetry, barkBloom;
     float velPow;        // velocity power curve exponent
     float velToneMidpoint, velToneSharpness;
+    float afterglowAmount, afterglowDecay, afterglowHarmonic;
+    float resonanceAmount, resonanceHarmonic;
     // Knob defaults (display units matching sliders)
     float attackMs, releaseMs, fmDepthScaleX, driveKnob;
     float tremoloRateHz, tremoloDepthPct, reverbWetPct;
@@ -29,13 +32,16 @@ static const PresetData kPresetWurlitzer {
     0.35f, 0.40f,              // carrier: fast decay to 40% sustain (percussive)
     0.08f, 0.0f, 0.04f,       // mod: crisp 80ms bark, no sustain (pure tone after bark)
     0.10f, 5.5f, 0.004f, 0.25f, // FM range starts dark at pp; key scale; loud clack
-    0.08f, 0.10f, 0.04f,       // harmonic mix: odd partials define the Wurlitzer bite
-    1.2f,                      // satDrive: mild overdrive, adds mid-freq bite
+    0.04f, 0.07f, 0.02f,       // sustain harmonics stay lean; attack bloom adds the bark
+    1.35f,                     // satDrive: stronger pickup bite than Rhodes
+    0.72f, 0.62f,              // asymmetric reed shaping + transient bark bloom
     2.0f,                      // velPow: quadratic — very touch-sensitive
     0.58f, 9.5f,               // tone S-curve: soft lows, bright mid-velocity bark
+    0.0f, 0.18f, 4.0f,         // no bell afterglow on Wurlitzer
+    0.0f, 3.0f,                // no pedal resonance on Wurlitzer
     1.0f, 400.0f, 1.0f, 1.2f, // attack, release, FM scale, drive knob
-    5.0f, 28.0f, 25.0f,        // tremolo 5Hz/28% (signature Wurlitzer tremolo); dry reverb
-    8.0f,                      // chorusMix: minimal (Wurlitzer is naturally focused)
+    5.0f, 28.0f, 18.0f,        // tremolo 5Hz/28% (signature Wurlitzer tremolo); drier room
+    2.0f,                      // chorusMix: nearly dry to avoid dated soft-synth sheen
 };
 
 static const PresetData kPresetRhodes {
@@ -48,8 +54,11 @@ static const PresetData kPresetRhodes {
     0.20f, 2.2f, 0.0015f, 0.12f, // narrower FM range; minimal key scale; soft clack
     0.03f, 0.05f, 0.00f,       // harmonic mix: light upper partials, near-sine tine core
     0.30f,                     // satDrive: very mild (felt hammer, clean pickup)
+    0.0f, 0.0f,                // no Wurlitzer-style reed asymmetry or bark bloom
     1.3f,                      // velPow: gentler curve (Rhodes is more forgiving)
     0.62f, 6.5f,               // tone S-curve: smoother brightening than Wurlitzer
+    0.22f, 0.24f, 4.0f,        // note-off bell afterglow for tine/tonebar shimmer
+    0.10f, 2.7f,               // sustain-pedal sympathetic resonance for Rhodes body/tonebar bloom
     1.0f, 800.0f, 1.0f, 0.3f, // attack, release, FM scale, drive knob
     4.0f, 12.0f, 48.0f,        // tremolo 4Hz/12% (subtle); more reverb for spaciousness
     28.0f,                     // chorusMix: prominent (Rhodes shimmer is iconic)
@@ -251,9 +260,16 @@ void MainComponent::applyPreset(Preset p)
     synthParams.carrierH3      = d.carrierH3;
     synthParams.carrierH5      = d.carrierH5;
     synthParams.satDrive       = d.satDrive;
+    synthParams.reedAsymmetry  = d.reedAsymmetry;
+    synthParams.barkBloom      = d.barkBloom;
     synthParams.velPow         = d.velPow;
     synthParams.velToneMidpoint  = d.velToneMidpoint;
     synthParams.velToneSharpness = d.velToneSharpness;
+    synthParams.afterglowAmount  = d.afterglowAmount;
+    synthParams.afterglowDecay   = d.afterglowDecay;
+    synthParams.afterglowHarmonic = d.afterglowHarmonic;
+    synthParams.resonanceAmount  = d.resonanceAmount;
+    synthParams.resonanceHarmonic = d.resonanceHarmonic;
     synthParams.fmDepthScale   = d.fmDepthScaleX;
     synthParams.attackTime     = d.attackMs  / 1000.0f;
     synthParams.releaseTime    = d.releaseMs / 1000.0f;

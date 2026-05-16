@@ -39,6 +39,40 @@ float applyReedBuzz(float sample, float driveAmount, float mix)
     const float oddEmphasis = 0.82f * clipped + 0.18f * clipped * clipped * clipped;
     return juce::jmap(mix, sample, oddEmphasis);
 }
+
+float applyAsymmetricReedShape(float sample, float asymmetry, float bark)
+{
+    asymmetry = juce::jlimit(0.0f, 1.0f, asymmetry);
+    bark = juce::jlimit(0.0f, 1.0f, bark);
+
+    if (asymmetry <= 0.0001f && bark <= 0.0001f)
+        return sample;
+
+    const float posDrive = 1.0f + asymmetry * 2.4f + bark * 1.1f;
+    const float negDrive = 1.0f + asymmetry * 0.9f;
+    const float shaped = sample >= 0.0f
+                             ? std::tanh(sample * posDrive) / std::tanh(posDrive)
+                             : std::tanh(sample * negDrive) / std::tanh(negDrive);
+    const float evenTilt = asymmetry * 0.12f * (sample * sample - 0.35f * std::abs(sample));
+    return juce::jlimit(-1.0f, 1.0f, shaped + evenTilt);
+}
+
+float renderAfterglowSample(double angle, float modulation, float harmonic)
+{
+    const float harmonicRatio = juce::jlimit(2.0f, 5.0f, harmonic);
+    const float phase = (float) angle + modulation * 0.15f;
+    const float bright = (float) std::sin(phase * harmonicRatio);
+    return ((float) std::sin(phase) + 0.40f * bright) / 1.40f;
+}
+
+float renderResonanceSample(double angle, float modulation, float harmonic)
+{
+    const float harmonicRatio = juce::jlimit(2.0f, 4.0f, harmonic);
+    const float phase = (float) angle + modulation * 0.08f;
+    const float resonant = (float) std::sin(phase * harmonicRatio);
+    const float upper = (float) std::sin(phase * (harmonicRatio + 0.8f));
+    return (resonant + 0.22f * upper) / 1.22f;
+}
 }
 
 bool ElectricPianoVoice::canPlaySound(juce::SynthesiserSound* sound)
@@ -68,6 +102,9 @@ void ElectricPianoVoice::startNote(int midiNoteNumber, float velocity,
     modulatorAngle = 0.0;
     pitchBendRatio = 1.0f;
     level = velocity;
+    afterglowLevel = 0.0f;
+    afterglowDecay = 0.0f;
+    sympatheticResonance = 0.0f;
 
     // Read all preset + user params from the shared atomic struct.
     // Falls back to Wurlitzer 200A defaults when params is null.
@@ -88,11 +125,21 @@ void ElectricPianoVoice::startNote(int midiNoteNumber, float velocity,
     const float velPow       = params ? params->velPow.load()         : 2.0f;
     const float velToneMid   = params ? params->velToneMidpoint.load(): 0.58f;
     const float velToneSharp = params ? params->velToneSharpness.load(): 9.0f;
+    const float afterglowAmt = params ? params->afterglowAmount.load(): 0.0f;
+    const float afterglowSec = params ? params->afterglowDecay.load() : 0.18f;
+    const float afterglowHarmonic = params ? params->afterglowHarmonic.load() : 4.0f;
+    const float resonanceAmount = params ? params->resonanceAmount.load() : 0.0f;
+    const float resonanceHarmonic = params ? params->resonanceHarmonic.load() : 3.0f;
 
     const float velLevel = std::pow(velocity, velPow);
     const float velTone  = shapeVelocityForTone(velocity, velToneMid, velToneSharp);
     level = velLevel;
     buzzExcitation = velTone;
+    currentAfterglowAmount = afterglowAmt;
+    currentAfterglowHarmonic = afterglowHarmonic;
+    currentResonanceAmount = resonanceAmount;
+    currentResonanceHarmonic = resonanceHarmonic;
+    afterglowDecay = (float) std::pow(0.001, 1.0 / (getSampleRate() * juce::jmax(0.01f, afterglowSec)));
 
     const float highNoteFactor = juce::jlimit(0.0f, 1.0f, ((float) midiNoteNumber - 72.0f) / 24.0f);
     const float transientDecay = juce::jmap(highNoteFactor, mDecay, mDecay * 0.6f);
@@ -135,6 +182,7 @@ void ElectricPianoVoice::stopNote(float, bool allowTailOff)
     {
         carrierEnv.noteOff();
         modulatorEnv.noteOff();
+        afterglowLevel = juce::jmax(afterglowLevel, level * currentAfterglowAmount);
     }
     else
     {
@@ -145,6 +193,8 @@ void ElectricPianoVoice::stopNote(float, bool allowTailOff)
         modulatorDelta = 0.0;
         baseFrequencyHz = 0.0;
         pitchBendRatio = 1.0f;
+        afterglowLevel = 0.0f;
+        sympatheticResonance = 0.0f;
     }
     noiseBurstLevel = 0.0f;
     buzzExcitation = 0.0f;
@@ -163,6 +213,8 @@ void ElectricPianoVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
     const float h3    = params ? params->carrierH3.load()    : 0.10f;
     const float h5    = params ? params->carrierH5.load()    : 0.04f;
     const float buzzDrive = params ? params->satDrive.load()   : 1.0f;
+    const float reedAsymmetry = params ? params->reedAsymmetry.load() : 0.0f;
+    const float barkBloom = params ? params->barkBloom.load() : 0.0f;
     const float drive     = params ? params->driveAmount.load(): 1.0f;
 
     while (--numSamples >= 0)
@@ -172,13 +224,46 @@ void ElectricPianoVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
 
         float mod  = modEnv * modulationDepth * (float)std::sin(modulatorAngle);
 
-        float carrierL = renderCarrierSample(carrierAngleL, mod, h2, h3, h5);
-        float carrierR = renderCarrierSample(carrierAngleR, mod, h2, h3, h5);
+        const float barkAmount = juce::jlimit(0.0f, 1.0f,
+                                              barkBloom * buzzExcitation * (0.25f + modEnv * 1.25f));
+        const float dynamicH2 = h2 + reedAsymmetry * barkAmount * 0.05f;
+        const float dynamicH3 = h3 + barkAmount * 0.16f;
+        const float dynamicH5 = h5 + barkAmount * 0.09f;
+
+        float carrierL = renderCarrierSample(carrierAngleL, mod, dynamicH2, dynamicH3, dynamicH5);
+        float carrierR = renderCarrierSample(carrierAngleR, mod, dynamicH2, dynamicH3, dynamicH5);
+
+        carrierL = applyAsymmetricReedShape(carrierL, reedAsymmetry, barkAmount);
+        carrierR = applyAsymmetricReedShape(carrierR, reedAsymmetry, barkAmount);
 
         const float buzzMix = juce::jlimit(0.0f, 1.0f,
                                            buzzExcitation * (0.35f + modEnv * 0.9f));
         carrierL = applyReedBuzz(carrierL, buzzDrive, buzzMix);
         carrierR = applyReedBuzz(carrierR, buzzDrive, buzzMix);
+
+        const float resonanceTarget = isSustainPedalDown() ? currentResonanceAmount : 0.0f;
+        sympatheticResonance += (resonanceTarget - sympatheticResonance) * 0.0025f;
+
+        if (sympatheticResonance > 0.00005f)
+        {
+            const float releaseBlend = isKeyDown()
+                                           ? juce::jlimit(0.0f, 0.25f, (1.0f - carEnv) * 0.20f)
+                                           : juce::jlimit(0.12f, 0.40f, 0.12f + (1.0f - carEnv) * 0.28f);
+            const float resL = renderResonanceSample(carrierAngleL, mod, currentResonanceHarmonic);
+            const float resR = renderResonanceSample(carrierAngleR, mod, currentResonanceHarmonic);
+            carrierL += resL * sympatheticResonance * releaseBlend;
+            carrierR += resR * sympatheticResonance * releaseBlend;
+        }
+
+        if (afterglowLevel > 0.00005f)
+        {
+            const float afterglowMix = juce::jlimit(0.0f, 0.30f, afterglowLevel);
+            const float bellL = renderAfterglowSample(carrierAngleL, mod, currentAfterglowHarmonic);
+            const float bellR = renderAfterglowSample(carrierAngleR, mod, currentAfterglowHarmonic);
+            carrierL = juce::jmap(afterglowMix, carrierL, bellL);
+            carrierR = juce::jmap(afterglowMix, carrierR, bellR);
+            afterglowLevel *= afterglowDecay;
+        }
 
         // Soft saturation: f(x) = x / (1 + |x|*drive) * (1+drive)
         // Clamps peaks while boosting mid-signal → warm, organic texture.
@@ -214,6 +299,8 @@ void ElectricPianoVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
             modulatorDelta = 0.0;
             baseFrequencyHz = 0.0;
             pitchBendRatio = 1.0f;
+            afterglowLevel = 0.0f;
+            sympatheticResonance = 0.0f;
             break;
         }
     }
