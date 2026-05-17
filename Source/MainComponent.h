@@ -60,6 +60,7 @@ private:
     std::atomic<float> reverbWetAmt    { 0.35f };
     std::atomic<bool>  reverbDirty     { false };
     std::atomic<float> chorusMixAmt    { 0.08f };  // updated per preset
+    std::atomic<float> masterGain      { 0.8f };   // global output level (NOT reset per preset)
     std::atomic<int>   pendingPedalNoise { 0 };    // +1 pedal down, -1 pedal up
     float              lastChorusMix   { -1.0f };  // tracks last applied value
 
@@ -100,11 +101,13 @@ private:
     juce::Slider sliderReverbWet,   sliderFMDepth;
     juce::Slider sliderAttack,      sliderRelease,   sliderDrive;
     juce::Slider sliderChorus;
+    juce::Slider sliderMaster;
 
     juce::Label  labelTremoloRate,  labelTremoloDepth;
     juce::Label  labelReverbWet,    labelFMDepth;
     juce::Label  labelAttack,       labelRelease,    labelDrive;
     juce::Label  labelChorus;
+    juce::Label  labelMaster;
 
     // VU meter level (RMS, written from audio thread)
     std::atomic<float> vuLevel { 0.0f };

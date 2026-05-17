@@ -241,17 +241,21 @@ MainComponent::MainComponent()
     setupKnob(sliderTremoloDepth, 0.0,  50.0, 25.0,  0);  sliderTremoloDepth.setTextValueSuffix("%");
     setupKnob(sliderReverbWet,    0.0,  60.0, 35.0,  0);  sliderReverbWet   .setTextValueSuffix("%");
     setupKnob(sliderChorus,       0.0,  50.0,  2.0,  0);  sliderChorus      .setTextValueSuffix("%");
+    setupKnob(sliderMaster,       0.0, 100.0, 80.0,  0);  sliderMaster      .setTextValueSuffix("%");
 
     setupLabel(labelTremoloRate,  "TREM RATE");
     setupLabel(labelTremoloDepth, "TREM DEPTH");
     setupLabel(labelReverbWet,    "REVERB");
     setupLabel(labelChorus,       "CHORUS");
+    setupLabel(labelMaster,       "MASTER");
 
     sliderTremoloRate .onValueChange = [this] { tremoloRateHz   = (float)sliderTremoloRate .getValue(); };
     sliderTremoloDepth.onValueChange = [this] { tremoloDepthAmt = (float)sliderTremoloDepth.getValue() / 100.0f; };
     sliderReverbWet   .onValueChange = [this] { reverbWetAmt    = (float)sliderReverbWet   .getValue() / 100.0f;
                                                 reverbDirty     = true; };
     sliderChorus      .onValueChange = [this] { chorusMixAmt    = (float)sliderChorus      .getValue() / 100.0f; };
+    // Master is a global output control — deliberately NOT snapped in applyPreset.
+    sliderMaster      .onValueChange = [this] { masterGain      = (float)sliderMaster      .getValue() / 100.0f; };
 
     setSize(800, 520);
     setAudioChannels(0, 2);
@@ -637,6 +641,33 @@ void MainComponent::getNextAudioBlock(const juce::AudioSourceChannelInfo& buffer
         fxReverb.process(ctx);
     }
 
+    // Master volume + output soft limiter (final stage). Many voices + the
+    // reverb tail can sum past 0 dBFS; this is transparent below ±0.8 and
+    // smoothly asymptotes to ±1.0 above, so hard clipping never reaches the
+    // DAC. VU (below) then reflects the true audible output.
+    {
+        const float g = masterGain.load();
+        auto softClip = [](float x) noexcept
+        {
+            constexpr float t = 0.8f;                 // linear region
+            const float a = std::abs(x);
+            if (a <= t) return x;
+            const float shaped = t + (1.0f - t) * std::tanh((a - t) / (1.0f - t));
+            return (x < 0.0f) ? -shaped : shaped;
+        };
+
+        const int nCh = juce::jmin(2, bufferToFill.buffer->getNumChannels());
+        for (int ch = 0; ch < nCh; ++ch)
+        {
+            float* d = bufferToFill.buffer->getWritePointer(ch);
+            for (int i = 0; i < bufferToFill.numSamples; ++i)
+            {
+                const int idx = bufferToFill.startSample + i;
+                d[idx] = softClip(d[idx] * g);
+            }
+        }
+    }
+
     // VU meter: exponential-smoothed RMS (attack fast, release slow)
     {
         float sumSq = 0.0f;
@@ -923,10 +954,10 @@ void MainComponent::resized()
         placeKnob(labelDrive,    sliderDrive);
     }
 
-    // FX section: 4 knobs (TREM RATE, TREM DEPTH, REVERB, CHORUS)
+    // FX section: 5 knobs (TREM RATE, TREM DEPTH, REVERB, CHORUS, MASTER)
     {
         const int secW  = W - kDivX - 6 - 14;
-        const int cellW = secW / 4;
+        const int cellW = secW / 5;
         int x = kDivX + 8;
         const int y0 = kSectionTop + kSectionPad;
 
@@ -940,5 +971,6 @@ void MainComponent::resized()
         placeKnob(labelTremoloDepth, sliderTremoloDepth);
         placeKnob(labelReverbWet,    sliderReverbWet);
         placeKnob(labelChorus,       sliderChorus);
+        placeKnob(labelMaster,       sliderMaster);
     }
 }

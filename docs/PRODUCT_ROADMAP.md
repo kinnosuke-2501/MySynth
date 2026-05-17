@@ -33,7 +33,7 @@
 | カテゴリ | 問題 | 優先度 |
 |---|---|---|
 | ~~振幅エンベロープ~~ | ✅ Phase 9-1 完了: EpAmpEnvelope (2段指数ディケイ) でフラットsustain廃止 | 済 |
-| **出力安全性** | マスターボリューム / 出力リミッタ未実装、クリップし得る | P0 |
+| ~~出力安全性~~ | ✅ Phase 9-2 完了: MASTER ノブ + 出力ソフトリミッタ | 済 |
 | **空間系** | Freeverb は箱鳴り。プリディレイ/トーン無し。Rhodesはパントレモロ未対応 (ドリームポップ狙いの要) | P0 |
 | **状態永続化** | 起動ごとにパラメータがリセットされる | P1 |
 | **プリセット管理** | 保存・読み込み・ユーザープリセット なし | P1 |
@@ -394,8 +394,8 @@ juce_add_gui_app(ElectricPiano
 | # | トラック | タスク | ファイル | 工数 |
 |---|---|---|---|---|
 | ~~5~~ | 音 | ✅ Phase 9-1 完了: 2段指数ディケイ (EpAmpEnvelope) | SynthVoice.h/cpp | 済 |
-| 6 | 音 | マスターボリューム + 出力ソフトリミッタ (← 自律進行中) | MainComponent.h/cpp | 0.5日 |
-| 7 | 音 | リバーブ刷新 (プリディレイ/高域ダンプ) + Rhodes パントレモロ | MainComponent.cpp | 1–2日 |
+| ~~6~~ | 音 | ✅ Phase 9-2 完了: MASTER ノブ + 出力ソフトリミッタ | MainComponent.h/cpp | 済 |
+| 7 | 音 | リバーブ刷新 (プリディレイ/高域ダンプ) + Rhodes パントレモロ ← **次** (ユーザー在席時) | MainComponent.cpp | 1–2日 |
 | 8 | UX | 状態永続化 (ApplicationProperties) | MainComponent.cpp | 0.5日 |
 | 9 | UX | VU/LED を独立コンポーネント化し 30fps 部分描画 | MainComponent.* | 0.5日 |
 | 10 | UX | ノブ UX 標準化 (既定値復帰/微調整) + プリセット保存 | MainComponent.* | 1–2日 |
