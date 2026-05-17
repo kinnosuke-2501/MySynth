@@ -43,7 +43,7 @@
 | ~~ノブ UX~~ | ✅ Phase 9-7 完了: ダブルクリック既定値復帰 / ホイール / Cmd-Ctrl 微調整 (MIDIラーンは将来) | 済 |
 | **アクセシビリティ** | `g.drawText` のシルクスクリーン文字が VoiceOver 不可視 | P2 |
 | **フォント** | システムフォント依存 (未埋め込み) | P2 |
-| **配布** | 未署名・未公証 (Gatekeeper ブロック)、製品名/ID/アイコン未整備 | P2 |
+| 配布(Mac) | ✅ Phase 9-9: 製品名/ID/アイコン/Universal/配布スクリプト/Pages 整備済。署名・公証は未 (友達配布は右クリック→開くで可)。プラグイン化(Logic)/Windows は別フェーズ | 一部済 |
 | **レイアウト負債** | `paint`/`resized` の幾何二重計算 (固定サイズ化で実害は消失、整理は将来) | P3 |
 
 ---
@@ -400,7 +400,10 @@ juce_add_gui_app(ElectricPiano
 | ~~9~~ | UX | ✅ Phase 9-6 完了: 30fps dirty-rect 部分描画 (子化は z 順衝突のため見送り、見た目不変で同等性能) | MainComponent.* | 済 |
 | 10a | UX | ✅ Phase 9-7 完了: ノブ UX 標準化 (既定値復帰/ホイール/微調整) | MainComponent.* | 済 |
 | ~~10b~~ | UX | ✅ Phase 9-8 完了: ヘッダ中央 ComboBox で保存/読込/削除 (XML/file, ファクトリ2+ユーザー) | MainComponent.* | 済 |
-| 11 | 配布 | 製品名/Bundle ID/アイコン/署名・公証 | CMakeLists.txt 他 | 1日 + Apple Developer |
+| 11a | 配布 | ✅ Phase 9-9 完了: 製品名/ID/アイコン/Universal/package・publish/Pages (未署名) | CMakeLists.txt 他 | 済 |
+| 11b | 配布 | 署名・公証 (Gatekeeper 警告解消) | — | Apple Developer $99/年 (要加入) |
+| 11c | 配布 | プラグイン化 (AU+VST3+Standalone, Logic 対応) — AudioProcessor 移行 | 大改修 | 数日 |
+| 11d | 配布 | Windows 対応 (VST3+Standalone, 要 Windows ビルド/テスト環境) | 中 | — |
 
 ### 将来 (任意・低優先)
 

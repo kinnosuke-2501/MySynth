@@ -1,14 +1,28 @@
 cmake_minimum_required(VERSION 3.22)
-project(MySynth VERSION 0.1.0)
+
+# --- Distribution settings (must be set before project()) ----------------
+# Universal binary so the build runs on both Apple Silicon and Intel Macs,
+# and a conservative minimum OS so older machines can run it.
+if(APPLE)
+    set(CMAKE_OSX_ARCHITECTURES "arm64;x86_64" CACHE STRING "" FORCE)
+    set(CMAKE_OSX_DEPLOYMENT_TARGET "11.0" CACHE STRING "" FORCE)
+endif()
+
+project(MySynth VERSION 1.0.0)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 add_subdirectory(JUCE)
 
+# Product identity. Internal target stays "MySynth" (keeps build paths and
+# the ~/Library/Application Support/MySynth settings folder stable); only the
+# user-facing name/ids change. Rename freely here.
 juce_add_gui_app(MySynth
-    PRODUCT_NAME     "MySynth"
-    COMPANY_NAME     "MySynthDev"
-    BUNDLE_ID        "com.mysynthdev.mysynth"
+    PRODUCT_NAME     "StageFM"
+    COMPANY_NAME     "StageFM"
+    BUNDLE_ID        "com.stagefm.app"
+    VERSION          "1.0.0"
+    ICON_BIG         "${CMAKE_CURRENT_SOURCE_DIR}/Assets/icon_1024.png"
     NEEDS_MIDI_INPUT TRUE
 )
 

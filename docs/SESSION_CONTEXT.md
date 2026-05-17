@@ -29,8 +29,11 @@
 >   (プリセット系は現プリセット値へ)、ホイール、Cmd/Ctrl 微調整。
 > - Phase 9-8: **プリセット管理**。ヘッダ中央に ComboBox+Save+Del。ファクトリ2種
 >   ＋ユーザープリセット (XML/file) を1リスト統合、WURLI/ROADS と同期。
+> - Phase 9-9: **配布整備(Mac/Phase A)**。Universal(arm64+x86_64)/macOS11+、
+>   製品名 StageFM・Bundle ID・v1.0.0・自作アイコン、package/publish スクリプト、
+>   GitHub Pages 配布ページ。公開(外向き)はユーザー確認後に実行。
 > - **設計原則確定: 音作りは要望より実機挙動の再現を優先**。
-> - 次候補: 配布 (#11) / ヘッダ UI 再設計 / アクセシビリティ。
+> - 次候補: 公開実行 / プラグイン化(B, Logic/AU+VST3) / Windows(C)。
 
 ### ビルド・起動
 
@@ -268,6 +271,25 @@ Modulator (倍音エンベロープ): attack=0.5ms, decay=120ms, sustain=0%, rel
 > 既知: ヘッダ右の LED/ROADS 重なりは未解消 (将来の UI 再設計タスク)。プリセット
 > コントロールは中央でこれとは独立。
 
+**Phase 9-9 完了 (配布整備 Mac / Phase A — 2026-05-17):**
+
+ユーザー合意: スコープは Mac 単体アプリの配布のみ (Phase A)。プラグイン化(B)/Windows(C) は別途。
+
+| 項目 | 内容 |
+| --- | --- |
+| Universal | `CMakeLists.txt` で `CMAKE_OSX_ARCHITECTURES="arm64;x86_64"` + `CMAKE_OSX_DEPLOYMENT_TARGET=11.0` (project() 前に設定)。`lipo` で arm64/x86_64 両方確認済み |
+| 製品情報 | PRODUCT_NAME `StageFM` / BUNDLE_ID `com.stagefm.app` / VERSION 1.0.0。**内部ターゲット名と設定保存先は `MySynth` のまま維持** (ビルドパス・`~/Library/Application Support/MySynth` の安定のため)。表示名のみ変更 |
+| アイコン | `Assets/icon_1024.png` (真鍮ノブ意匠=UI と一貫)。`Assets/make_icon.py` で再生成可 (pure-Python, 依存なし)。`ICON_BIG` で .icns 自動生成、Info.plist に反映確認 |
+| Info.plist | `cmake/patch_plist.cmake` に `LSMinimumSystemVersion=11.0` 追記 (古い Mac で明確な表示) |
+| 配布物 | `scripts/package_release.sh` → `dist/StageFM-1.0.0-macOS.zip` (8.9MB, `ditto` でバンドル保持)。Release ビルド起動確認済み |
+| 公開 | `scripts/publish_release.sh` (gh): GitHub Release 作成/資産アップロード + `site/` を `gh-pages` へ + Pages 有効化。**外向きにつき未実行、ユーザー確認後に実行** |
+| 配布ページ | `site/index.html` (日本語、未署名アプリの右クリック→開く手順入り、アプリと同配色)。公開先 `https://kinnosuke-2501.github.io/MySynth/` |
+| 署名 | 未署名のまま (友達配布には右クリック→開くで十分)。Gatekeeper 警告完全解消は Apple Developer Program($99/年) 署名・公証で将来対応 |
+| 関連 | `run_debug.sh`/README/.gitignore を新 .app 名・新生成物に追従 |
+
+> Phase B (プラグイン化: `juce_add_plugin` で AU+VST3+Standalone、AudioProcessor 移行)
+> と Phase C (Windows) は未着手。Logic は AU のみ対応、Windows DAW は VST3。
+
 ---
 
 ## 現在のUI構成
@@ -334,4 +356,5 @@ LED: KEY=発音中(アンバー) / SUS=サステイン(シアン)
 | Phase 6 | 音色ブラッシュアップ (倍音、ノンリニア特性、afterglow、resonance、pedal noise) | ✅ 完了 |
 | Phase 7 | UI/UX 全面リデザイン (VintageLookAndFeel、800×520、VU メーター) | ✅ 完了 |
 | Phase 8 | 正しさ三点パック (位相ラップ・DCブロッカー・固定サイズ) + 2× オーバーサンプリング | ✅ 完了 |
-| **Phase 9** | **音作り(9-1〜9-4 ✅) / 永続化(9-5 ✅) / 描画(9-6 ✅) / ノブUX(9-7 ✅) / プリセット管理(9-8 ✅) / 残: 配布** | 進行中 |
+| **Phase 9** | **音作り(9-1〜9-4 ✅) / 永続化(9-5 ✅) / 描画(9-6 ✅) / ノブUX(9-7 ✅) / プリセット(9-8 ✅) / 配布Mac(9-9 ✅)** | ほぼ完了 |
+| Phase 10 | プラグイン化(AU+VST3, Logic 対応) / Windows 対応 | 未着手 (要合意) |

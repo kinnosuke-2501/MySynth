@@ -40,7 +40,7 @@ cmake --build build --config Debug --target MySynth -j$(sysctl -n hw.logicalcpu)
 ## 起動
 
 ```bash
-open "build/MySynth_artefacts/Debug/MySynth.app"
+open "build/MySynth_artefacts/Debug/StageFM.app"
 ```
 
 または補助スクリプトを使えます。
@@ -48,6 +48,21 @@ open "build/MySynth_artefacts/Debug/MySynth.app"
 ```bash
 ./scripts/run_debug.sh
 ```
+
+## 配布（友達に渡す / Web で配る）
+
+未署名のまま無料で配布できます（Apple Developer Program 不要）。
+
+```bash
+./scripts/package_release.sh   # Release Universal をビルド → dist/StageFM-<ver>-macOS.zip
+./scripts/publish_release.sh   # ↑を GitHub Releases に公開 + 配布ページ(GitHub Pages)を更新
+```
+
+- `package_release.sh`: Apple Silicon / Intel 両対応（Universal, macOS 11+）の `.app` を zip 化。
+- `publish_release.sh`: **外向き公開**。GitHub Release 作成と `site/` を `gh-pages` へデプロイ、Pages 有効化。
+- 配布ページ: `https://kinnosuke-2501.github.io/MySynth/`（インストール手順入り。`site/index.html`）。
+- 未署名のため初回は **右クリック →「開く」** が必要（ページに手順記載）。警告を消すには Apple Developer Program 署名・公証が必要（将来）。
+- アプリアイコン: `Assets/icon_1024.png`（`Assets/make_icon.py` で再生成可）。
 
 ## ディレクトリ構成
 
@@ -59,8 +74,10 @@ open "build/MySynth_artefacts/Debug/MySynth.app"
 │   ├── PRODUCT_ROADMAP.md
 │   └── SESSION_CONTEXT.md
 ├── Source/
+├── Assets/          # アプリアイコン (icon_1024.png + 生成スクリプト)
+├── site/            # GitHub Pages 配布ページ
 ├── cmake/
-├── scripts/
+├── scripts/         # run_debug / package_release / publish_release
 ├── JUCE/
 └── CMakeLists.txt
 ```
