@@ -49,6 +49,14 @@ private:
     juce::dsp::Chorus<float>  fxChorus;
     juce::dsp::Reverb         fxReverb;
 
+    // Reverb is run as a 100%-wet send: pre-delay (plate-style, keeps the
+    // attack clear) → reverb → wet high-cut (dark dreampop bloom) → mixed
+    // under the full dry signal. State below is audio-thread only.
+    juce::dsp::DelayLine<float> reverbPreDelay { 1 << 17 };  // max ≈ 2.7 s @48k
+    juce::AudioBuffer<float>    reverbWetBuffer;              // wet work buffer
+    float reverbWetLpf[2]   { 0.0f, 0.0f };                  // one-pole HF-damp state
+    float reverbWetLpfCoef  = 0.2f;                          // set in prepareToPlay
+
     // Tremolo LFO state (Wurlitzer 145 amp character)
     double tremoloPhase      = 0.0;
     double tremoloPhaseDelta = 0.0;
@@ -57,8 +65,7 @@ private:
     // Atomics for audio-thread-readable effect parameters
     std::atomic<float> tremoloRateHz   { 5.0f };
     std::atomic<float> tremoloDepthAmt { 0.25f };
-    std::atomic<float> reverbWetAmt    { 0.35f };
-    std::atomic<bool>  reverbDirty     { false };
+    std::atomic<float> reverbWetAmt    { 0.35f };  // wet send gain (reverb itself is 100% wet)
     std::atomic<float> chorusMixAmt    { 0.08f };  // updated per preset
     std::atomic<float> masterGain      { 3.6f };   // = slider 60% × kMasterMaxGain; global, NOT reset per preset
     std::atomic<int>   pendingPedalNoise { 0 };    // +1 pedal down, -1 pedal up

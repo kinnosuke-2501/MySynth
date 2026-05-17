@@ -19,8 +19,10 @@
 >   FX セクションに追加 (グローバル設定のためプリセットでリセットしない)。
 > - Phase 9-3: フィードバック対応。Wurli アタックを実機寄りに緩和、MASTER レンジ拡張
 >   (DRIVE 併用でアンプ的歪み)。RELEASE 一定は実機仕様につき意図的 (変更なし)。
+> - Phase 9-4: **リバーブ刷新 (プリディレイ+wet高域ダンプ+センド構成) + Rhodes
+>   パントレモロ** (Suitcase の vibrato は実機ではステレオオートパン)。
 > - **設計原則確定: 音作りは要望より実機挙動の再現を優先**。
-> - 次はリバーブ刷新 (#7)。ユーザー在席時に音を聴きながら着手。
+> - 次候補: 状態永続化 (#8) / 描画分離 (#9) / ノブUX+プリセット保存 (#10)。
 
 ### ビルド・起動
 
@@ -62,12 +64,15 @@ workspace_20260516/
 MIDIキーボード
   → MidiInput::openDevice (全デバイス自動オープン)
   → MidiMessageCollector (スレッドセーフキュー、CC#64も通過)
-  → juce::Synthesiser (16ボイス ポリフォニー、サステインペダル自動処理)
-  → ElectricPianoVoice × 16 (FM合成、プリセット参照)
-  → Chorus (juce::dsp::Chorus, 25% wet)
-  → Tremolo (LFO、ノブで可変)
-  → Reverb (juce::dsp::Reverb、ノブで可変)
-  → スピーカー出力
+  → juce::Synthesiser (16ボイス、2×OS で生成→デシメート)
+  → ElectricPianoVoice × 16 (FM合成、EpAmpEnvelope、プリセット参照)
+  → DCブロッカー (~20Hz HPF)
+  → Chorus (juce::dsp::Chorus)
+  → Tremolo (Wurli=振幅 / Rhodes=ステレオオートパン)
+  → ペダルノイズ加算
+  → Reverb センド (プリディレイ25ms → 100%wet reverb → wet 7kHz LPF → dry に加算)
+  → MASTER ゲイン → 出力ソフトリミッタ
+  → VU 計測 → スピーカー出力
 ```
 
 ### FM合成エンジン (SynthVoice.cpp)
@@ -186,6 +191,21 @@ Modulator (倍音エンベロープ): attack=0.5ms, decay=120ms, sustain=0%, rel
 > RELEASE の聴き方: 「押してすぐ離す」と「押し続ける」で比較。前者はダンパー (RELEASE) が、
 > 後者は実機同様の固定物理減衰 (Decay2) が支配する。両者の違いが実機の挙動。
 
+**Phase 9-4 完了 (リバーブ刷新 + Rhodes パントレモロ — 2026-05-17):**
+
+| 項目 | 内容 |
+| --- | --- |
+| リバーブ構成変更 | `juce::dsp::Reverb` を 100% wet 化し、自前で「プリディレイ → reverb → wet 高域ダンプ → dry にセンド加算」に再構成。Freeverb の箱鳴り/プリディレイ無しを解消 |
+| プリディレイ | `juce::dsp::DelayLine` で 25ms。EP アタックを濁さずプレート的に後から鳴る |
+| wet 高域ダンプ | wet センドに 1 次 LPF (~7kHz)。シューゲイザー的な暗いプレート bloom |
+| reverb パラメータ | roomSize 0.75→0.82 (広い)、damping 0.45→0.60 (暗いテイル)、wet=1/dry=0 |
+| REVERB ノブ | wet センドゲイン (0–0.6) に役割変更。`reverbDirty` の再構築機構は不要になり**完全削除** |
+| Rhodes パントレモロ | 実機 Rhodes Suitcase の "vibrato" はステレオ**オートパン**。`currentPreset==Rhodes` 時は等パワーパン (gL²+gR²一定=レベル変動なし、定位のみ移動)。Wurlitzer は従来どおり振幅トレモロ (145 アンプ) |
+| 実機根拠 | Suitcase 回路 = ステレオ強度パン / Wurli 200A = アンプの真の振幅トレモロ。両者を別処理に分岐 |
+
+> 注: リバーブ/パンは base レート (OS 後) で処理。wet バッファは prepareToPlay で
+> maxBlock 確保し再アロケーション無し。モノデバイス時は L のみ (R==null) で従来挙動。
+
 ---
 
 ## 現在のUI構成
@@ -222,8 +242,9 @@ LED: KEY=発音中(アンバー) / SUS=サステイン(シアン)
 | キャリアSustain | 45% | 70% |
 | Velocity感度 | 0.8–6.0 (wide) | 0.5–3.0 (narrow) |
 | ノイズバースト | 20% (reed clack) | 12% (tine tap) |
-| Tremolo | 5Hz / 25% | 4Hz / 15% |
-| Reverb Wet | 35% | 45% |
+| Tremolo方式 | 振幅トレモロ (145アンプ) | ステレオ オートパン (Suitcase) |
+| Tremolo | 5Hz / 28% | 4Hz / 12% |
+| Reverb Wet (send) | 18% | 48% |
 
 ---
 
@@ -251,4 +272,4 @@ LED: KEY=発音中(アンバー) / SUS=サステイン(シアン)
 | Phase 6 | 音色ブラッシュアップ (倍音、ノンリニア特性、afterglow、resonance、pedal noise) | ✅ 完了 |
 | Phase 7 | UI/UX 全面リデザイン (VintageLookAndFeel、800×520、VU メーター) | ✅ 完了 |
 | Phase 8 | 正しさ三点パック (位相ラップ・DCブロッカー・固定サイズ) + 2× オーバーサンプリング | ✅ 完了 |
-| **Phase 9** | **2段指数ディケイ (9-1 ✅) / マスターVol+リミッタ (9-2 ✅) / リバーブ刷新 / 状態永続化** | 進行中 |
+| **Phase 9** | **2段指数ディケイ(9-1✅) / マスターVol+リミッタ(9-2✅) / 実機準拠調整(9-3✅) / リバーブ刷新+パントレモロ(9-4✅) / 状態永続化** | 進行中 |

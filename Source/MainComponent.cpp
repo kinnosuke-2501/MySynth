@@ -258,8 +258,7 @@ MainComponent::MainComponent()
 
     sliderTremoloRate .onValueChange = [this] { tremoloRateHz   = (float)sliderTremoloRate .getValue(); };
     sliderTremoloDepth.onValueChange = [this] { tremoloDepthAmt = (float)sliderTremoloDepth.getValue() / 100.0f; };
-    sliderReverbWet   .onValueChange = [this] { reverbWetAmt    = (float)sliderReverbWet   .getValue() / 100.0f;
-                                                reverbDirty     = true; };
+    sliderReverbWet   .onValueChange = [this] { reverbWetAmt    = (float)sliderReverbWet   .getValue() / 100.0f; };
     sliderChorus      .onValueChange = [this] { chorusMixAmt    = (float)sliderChorus      .getValue() / 100.0f; };
     // Master is a global output control — deliberately NOT snapped in applyPreset.
     sliderMaster      .onValueChange = [this] { masterGain      = (float)sliderMaster      .getValue() / 100.0f * kMasterMaxGain; };
@@ -438,16 +437,28 @@ void MainComponent::prepareToPlay(int samplesPerBlockExpected, double sampleRate
     tremoloPhaseDelta = (double)tremoloRateHz.load() / sampleRate * juce::MathConstants<double>::twoPi;
     tremoloPhase = 0.0;
 
-    // Reverb: spacious room for dreampop ambience (applied last)
+    // Reverb: run 100% wet — pre-delay + wet high-cut + dry/wet mix are done
+    // by hand in getNextAudioBlock for a plate-like dreampop bloom.
     fxReverb.prepare(spec);
     juce::dsp::Reverb::Parameters rvp;
-    rvp.roomSize   = 0.75f;
-    rvp.damping    = 0.45f;
-    rvp.wetLevel   = 0.35f;
-    rvp.dryLevel   = 0.65f;
+    rvp.roomSize   = 0.82f;   // larger, more spacious than the old boxy 0.75
+    rvp.damping    = 0.60f;   // darker tail (shoegaze) than the old 0.45
+    rvp.wetLevel   = 1.0f;    // 100% wet — dry/wet mix is external
+    rvp.dryLevel   = 0.0f;
     rvp.width      = 1.0f;
     rvp.freezeMode = 0.0f;
     fxReverb.setParameters(rvp);
+
+    reverbPreDelay.prepare(spec);
+    reverbPreDelay.reset();
+    reverbPreDelay.setDelay((float) (0.025 * sampleRate));   // 25 ms plate pre-delay
+
+    reverbWetBuffer.setSize(2, samplesPerBlockExpected, false, false, true);
+    reverbWetBuffer.clear();
+    reverbWetLpf[0] = reverbWetLpf[1] = 0.0f;
+    // One-pole low-pass on the wet send (~7 kHz) — vintage-plate darkness.
+    reverbWetLpfCoef = juce::jlimit (0.02f, 1.0f,
+        1.0f - std::exp (-juce::MathConstants<float>::twoPi * 7000.0f / (float) sampleRate));
 }
 
 void MainComponent::getNextAudioBlock(const juce::AudioSourceChannelInfo& bufferToFill)
@@ -462,20 +473,6 @@ void MainComponent::getNextAudioBlock(const juce::AudioSourceChannelInfo& buffer
             fxChorus.setMix(newMix);
             lastChorusMix = newMix;
         }
-    }
-
-    // Apply reverb parameter changes requested from UI thread.
-    if (reverbDirty.exchange(false))
-    {
-        float wet = reverbWetAmt.load();
-        juce::dsp::Reverb::Parameters rvp;
-        rvp.roomSize   = 0.75f;
-        rvp.damping    = 0.45f;
-        rvp.wetLevel   = wet;
-        rvp.dryLevel   = 1.0f - wet;
-        rvp.width      = 1.0f;
-        rvp.freezeMode = 0.0f;
-        fxReverb.setParameters(rvp);
     }
 
     bufferToFill.clearActiveBufferRegion();
@@ -570,22 +567,37 @@ void MainComponent::getNextAudioBlock(const juce::AudioSourceChannelInfo& buffer
         fxChorus.process(ctx);
     }
 
-    // Tremolo: amplitude modulation via sine LFO (Wurlitzer 145 amp character).
-    // Applied sample-by-sample after chorus, before reverb, so the reverb tail
-    // is smooth rather than pulsing with the LFO.
+    // Tremolo, hardware-faithful per model:
+    //   Wurlitzer 200A → true amplitude tremolo (the 145 amp pumps level).
+    //   Rhodes Suitcase → the "vibrato" is actually a stereo AUTO-PAN; the
+    //     signal moves L↔R at constant power (no level pumping).
+    // Applied after chorus, before reverb, so the reverb tail stays smooth.
     {
-        const float  depth = tremoloDepthAmt.load();
-        tremoloPhaseDelta  = (double)tremoloRateHz.load() / currentSampleRate
-                             * juce::MathConstants<double>::twoPi;
+        const float depth   = tremoloDepthAmt.load();
+        tremoloPhaseDelta   = (double)tremoloRateHz.load() / currentSampleRate
+                              * juce::MathConstants<double>::twoPi;
+        const bool isRhodes = (currentPreset == Preset::Rhodes);
 
         auto* L = bufferToFill.buffer->getWritePointer(0);
         auto* R = (bufferToFill.buffer->getNumChannels() >= 2)
                   ? bufferToFill.buffer->getWritePointer(1) : nullptr;
         for (int i = 0; i < bufferToFill.numSamples; ++i)
         {
-            float trem = 1.0f - depth * (float)((1.0 - std::cos(tremoloPhase)) * 0.5);
-            L[bufferToFill.startSample + i] *= trem;
-            if (R) R[bufferToFill.startSample + i] *= trem;
+            const int idx = bufferToFill.startSample + i;
+            if (isRhodes && R != nullptr)
+            {
+                // Equal-power auto-pan: gL²+gR² is constant, so only the
+                // stereo position moves — the Rhodes Suitcase character.
+                const float p  = depth * (float) std::cos(tremoloPhase);   // -depth..+depth
+                L[idx] *= std::sqrt(juce::jmax(0.0f, 1.0f - p));
+                R[idx] *= std::sqrt(juce::jmax(0.0f, 1.0f + p));
+            }
+            else
+            {
+                const float trem = 1.0f - depth * (float)((1.0 - std::cos(tremoloPhase)) * 0.5);
+                L[idx] *= trem;
+                if (R) R[idx] *= trem;
+            }
             tremoloPhase += tremoloPhaseDelta;
         }
         tremoloPhase = std::fmod(tremoloPhase, juce::MathConstants<double>::twoPi);
@@ -640,12 +652,39 @@ void MainComponent::getNextAudioBlock(const juce::AudioSourceChannelInfo& buffer
         }
     }
 
+    // Reverb send: dry stays full; a pre-delayed, 100%-wet, high-cut reverb
+    // is mixed underneath. Pre-delay keeps the EP attack clear; the wet
+    // low-pass gives the dark plate bloom suited to the dreampop target.
     {
-        auto block = juce::dsp::AudioBlock<float>(*bufferToFill.buffer)
-                         .getSubBlock((size_t)bufferToFill.startSample,
-                                      (size_t)bufferToFill.numSamples);
-        juce::dsp::ProcessContextReplacing<float> ctx(block);
-        fxReverb.process(ctx);
+        const int   n       = bufferToFill.numSamples;
+        const int   nCh     = juce::jmin(2, bufferToFill.buffer->getNumChannels());
+        const float wetSend = reverbWetAmt.load();
+
+        for (int ch = 0; ch < nCh; ++ch)
+            reverbWetBuffer.copyFrom(ch, 0, *bufferToFill.buffer, ch,
+                                     bufferToFill.startSample, n);
+
+        {
+            auto wetBlock = juce::dsp::AudioBlock<float>(reverbWetBuffer)
+                                .getSubsetChannelBlock(0, (size_t) nCh)
+                                .getSubBlock(0, (size_t) n);
+            juce::dsp::ProcessContextReplacing<float> wctx(wetBlock);
+            reverbPreDelay.process(wctx);
+            fxReverb.process(wctx);
+        }
+
+        for (int ch = 0; ch < nCh; ++ch)
+        {
+            const float* w  = reverbWetBuffer.getReadPointer(ch);
+            float*       d  = bufferToFill.buffer->getWritePointer(ch);
+            float        lp = reverbWetLpf[ch];
+            for (int i = 0; i < n; ++i)
+            {
+                lp += reverbWetLpfCoef * (w[i] - lp);
+                d[bufferToFill.startSample + i] += wetSend * lp;
+            }
+            reverbWetLpf[ch] = lp;
+        }
     }
 
     // Master volume + output soft limiter (final stage). Many voices + the
