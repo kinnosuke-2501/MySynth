@@ -29,6 +29,14 @@ app_path="$build_dir/MySynth_artefacts/$config/$app_name.app"
 echo "==> Architectures:"
 lipo -archs "$app_path/Contents/MacOS/$app_name"
 
+# Ad-hoc code signing (free, no Apple account). Without ANY signature an
+# unsigned app is hard-blocked on Apple Silicon / modern macOS ("cannot be
+# verified, move to Trash") and even the right-click→Open / Open Anyway
+# bypass fails. Ad-hoc signing makes the one-time user approval actually work.
+echo "==> Ad-hoc code signing"
+codesign --force --deep --sign - --timestamp=none "$app_path"
+codesign -dvv "$app_path" 2>&1 | grep -E 'Signature=|Identifier=' || true
+
 mkdir -p dist
 zip_path="dist/${app_name}-${version}-macOS.zip"
 rm -f "$zip_path"

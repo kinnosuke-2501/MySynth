@@ -55,20 +55,33 @@
     <ol>
       <li>ダウンロードした <code>StageFM-*-macOS.zip</code> をダブルクリックで解凍</li>
       <li><code>StageFM.app</code> を「アプリケーション」フォルダにドラッグ</li>
-      <li><strong>初回だけ</strong>：<code>StageFM.app</code> を <strong>右クリック →「開く」</strong>
-          → 警告ダイアログでもう一度 <strong>「開く」</strong></li>
-      <li>2 回目以降はダブルクリックで普通に起動できます</li>
+      <li>一度ダブルクリック（「開けません」と出てOK。一旦キャンセル）</li>
+      <li><strong>アップルメニュー →「システム設定」→「プライバシーとセキュリティ」</strong>
+          を開き、下の方の <strong>「"StageFM" は…」の横の「このまま開く」</strong>
+          ボタンをクリック → パスワード入力</li>
+      <li>もう一度 <code>StageFM.app</code> を開く（以後はダブルクリックで普通に起動）</li>
     </ol>
+    <p class="meta">macOS 15 (Sequoia) では「右クリック→開く」が使えなくなり、
+       上の「システム設定 → プライバシーとセキュリティ →
+       このまま開く」が正規の手順です。</p>
   </div>
 
   <div class="card">
-    <h2>なぜ警告が出るの？</h2>
-    <p>Apple の有料署名（年 $99）をしていないため、macOS が
-       「開発元を確認できません」と警告します。これは署名の有無の話で、
-       中身が危険という意味ではありません。手順 3 の「右クリック →
-       開く」で一度許可すれば、以後は警告は出ません。ソースコードは
+    <h2>うまくいかない / ターミナルが使える人向け（確実）</h2>
+    <p>上の手順で開けない場合は、<strong>ターミナル.app</strong> を開いて
+       次の1行を貼り付けて Enter（アプリは「アプリケーション」に入れた状態で）：</p>
+    <p><code>xattr -dr com.apple.quarantine /Applications/StageFM.app</code></p>
+    <p class="meta">ダウンロード時に付く「検疫」フラグを外すだけの操作です。以後は普通に起動できます。</p>
+  </div>
+
+  <div class="card">
+    <h2>なぜこの操作が必要？</h2>
+    <p>Apple の有料署名・公証（年 $99）をしていないため、macOS が
+       「開発元を検証できません」と警告します。アプリ自体は ad-hoc 署名
+       済みで、上の一度きりの許可で問題なく動きます（中身が危険という
+       意味ではありません）。ソースは
        <a href="https://github.com/kinnosuke-2501/MySynth">GitHub で公開</a>
-       しており、自分でビルドすることもできます。</p>
+       しており、自分でビルドも可能です。</p>
   </div>
 
   <div class="card">
