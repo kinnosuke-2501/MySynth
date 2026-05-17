@@ -109,6 +109,26 @@ private:
     juce::TextButton  rhodesButton     { "ROADS" };
     Preset            currentPreset    { Preset::Wurlitzer };
 
+    // Preset manager (header centre): factory 2 + user presets in one box,
+    // kept in sync with the WURLI/ROADS model toggles.
+    juce::ComboBox    presetBox;
+    juce::TextButton  presetSaveButton   { "Save" };
+    juce::TextButton  presetDeleteButton { "Del" };
+    juce::Array<juce::File> userPresetFiles;   // index = comboId - kUserPresetIdBase
+    static constexpr int kUserPresetIdBase = 100;
+
+    juce::File presetDirectory();
+    void populatePresetBox();
+    void presetBoxChanged();
+    void savePresetDialog();
+    void writePreset(const juce::String& name);
+    void loadUserPreset(const juce::File&);
+    void deleteSelectedPreset();
+    void applyKnobSnapshot(double fmDepth, double attack, double release,
+                           double drive, double tremRate, double tremDepth,
+                           double reverb, double chorus, double master,
+                           bool setDoubleClickToThese);
+
     // Knob controls
     juce::Slider sliderTremoloRate, sliderTremoloDepth;
     juce::Slider sliderReverbWet,   sliderFMDepth;

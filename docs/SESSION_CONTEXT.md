@@ -27,8 +27,10 @@
 >   dirty rect のみ・変化時のみ無効化。見た目は不変。
 > - Phase 9-7: **ノブ UX 標準化**。全ノブにダブルクリックで既定値復帰
 >   (プリセット系は現プリセット値へ)、ホイール、Cmd/Ctrl 微調整。
+> - Phase 9-8: **プリセット管理**。ヘッダ中央に ComboBox+Save+Del。ファクトリ2種
+>   ＋ユーザープリセット (XML/file) を1リスト統合、WURLI/ROADS と同期。
 > - **設計原則確定: 音作りは要望より実機挙動の再現を優先**。
-> - 次候補: プリセット管理 (#10 後半・UI 設計判断要) / 配布 (#11)。
+> - 次候補: 配布 (#11) / ヘッダ UI 再設計 / アクセシビリティ。
 
 ### ビルド・起動
 
@@ -245,10 +247,26 @@ Modulator (倍音エンベロープ): attack=0.5ms, decay=120ms, sustain=0%, rel
 | 微調整 | Cmd/Ctrl ドラッグで細かく動く (juce::Slider 組込。レビューの「shift」ではなく JUCE 標準の Cmd/Ctrl を採用) |
 | loadState 整合 | 復元時は applyPreset→保存値で上書きの順。ダブルクリックはプリセット基準に戻る (直感的で一貫) |
 
-> #10 後半 (ユーザープリセット保存/管理) は本ターン未実施。理由: ComboBox + Save As +
-> ディレクトリ保存/削除/ファクトリ vs ユーザー + ヘッダ配置 (LED/ボタン重なり既知) は
-> 1–2 日規模で UI 設計判断を伴う。セッション永続化 (#8) で日常用途は充足済みのため、
-> 専用タスクとして設計合意の上で着手するのが適切と判断。
+> #10 後半 (ユーザープリセット保存/管理) は Phase 9-8 で実施。
+
+**Phase 9-8 完了 (プリセット管理 — 2026-05-17):**
+
+ユーザー設計合意: 配置=ヘッダ中央 / スコープ=保存・読込・削除 / ファクトリ2＋ユーザーを1リスト統合。
+
+| 項目 | 内容 |
+| --- | --- |
+| UI 配置 | タイトルとモデルボタンの間の空きヘッダ中央に `ComboBox`(150px)+`Save`(40)+`Del`(32)。WURLI/ROADS モデルボタンは存置 |
+| 統合リスト | ComboBox = ファクトリ「Wurlitzer 200A」(id1)「Rhodes Mark II」(id2) ＋ separator ＋ ユーザープリセット (id 100+)。WURLI/ROADS クリックで box も同期 (`dontSendNotification`)、互いに齟齬なし |
+| 保存 | `Save`→AlertWindow で命名→`writePreset()`。現在の model + 全9ノブ(MASTER 含む) を XML 属性で `Presets/<name>.preset` へ |
+| 読込 | box 選択で `loadUserPreset()`: model を applyPreset→ `applyKnobSnapshot()` で9ノブ上書き＋ダブルクリック既定値もそのプリセット値に |
+| 削除 | `Del`→OK/Cancel 確認→ファイル削除→再列挙。ファクトリ選択時は Del 無効 |
+| 保存先 | `~/Library/Application Support/MySynth/Presets/*.preset` (1プリセット1ファイル、Finder で管理/共有可) |
+| 永続化連携 | `saveState` に `presetSel`(box ラベル) 追加。起動時 `loadState` は音は settings から復元済みのため、box ラベルのみ名前一致で再選択 (`dontSendNotification`、二重ロード無し) |
+| リファクタ | ノブ一括設定を `applyKnobSnapshot()` に共通化 (loadState/loadUserPreset で再利用) |
+| 検証 | プリセットdir 走査・ファイル列挙・loadState 照合・saveState 往復を実地確認 (非クラッシュ)。GUI クリック操作 (Save/選択/Del ダイアログ) はヘッドレス検証不可 — 標準 JUCE API でビルド通過 |
+
+> 既知: ヘッダ右の LED/ROADS 重なりは未解消 (将来の UI 再設計タスク)。プリセット
+> コントロールは中央でこれとは独立。
 
 ---
 
@@ -258,13 +276,13 @@ Modulator (倍音エンベロープ): attack=0.5ms, decay=120ms, sustain=0%, rel
 
 ```text
 ┌─────────────────────────────────────────────────────────────┐
-│  ELECTRIC PIANO                  [WURLI] [ROADS]  (SUS)(KEY) │ ヘッダ
-│  STAGE FM ELECTRIC PIANO                                     │
+│ ELECTRIC PIANO [Preset ▼][Sav][Del] [WURLI][ROADS] (SUS)(KEY)│ ヘッダ
+│ STAGE FM ELECTRIC PIANO                                      │
 ├──────────────────────────┬──────────────────────────────────┤
 │  SOUND                   │  FX                               │
 │  FM DEPTH ATTACK         │  TREM RATE TREM DEPTH             │
-│  RELEASE  DRIVE          │  REVERB    CHORUS                 │
-│  [knob]×4                │  [knob]×4                         │
+│  RELEASE  DRIVE          │  REVERB  CHORUS  MASTER           │
+│  [knob]×4                │  [knob]×5                         │
 ├─────────────────────────────────────────────────────────────┤
 │  [ MIDI KEYBOARD (モデル別レンジ) ]                          │
 ├─────────────────────────────────────────────────────────────┤
@@ -316,4 +334,4 @@ LED: KEY=発音中(アンバー) / SUS=サステイン(シアン)
 | Phase 6 | 音色ブラッシュアップ (倍音、ノンリニア特性、afterglow、resonance、pedal noise) | ✅ 完了 |
 | Phase 7 | UI/UX 全面リデザイン (VintageLookAndFeel、800×520、VU メーター) | ✅ 完了 |
 | Phase 8 | 正しさ三点パック (位相ラップ・DCブロッカー・固定サイズ) + 2× オーバーサンプリング | ✅ 完了 |
-| **Phase 9** | **音作り(9-1〜9-4 ✅) / 永続化(9-5 ✅) / 描画(9-6 ✅) / ノブUX(9-7 ✅) / 残: プリセット管理・配布** | 進行中 |
+| **Phase 9** | **音作り(9-1〜9-4 ✅) / 永続化(9-5 ✅) / 描画(9-6 ✅) / ノブUX(9-7 ✅) / プリセット管理(9-8 ✅) / 残: 配布** | 進行中 |

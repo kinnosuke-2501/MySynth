@@ -217,8 +217,30 @@ MainComponent::MainComponent()
     rhodesButton.setToggleState(false, juce::dontSendNotification);
     addAndMakeVisible(wurlitzerButton);
     addAndMakeVisible(rhodesButton);
-    wurlitzerButton.onClick = [this] { applyPreset(Preset::Wurlitzer); };
-    rhodesButton.onClick    = [this] { applyPreset(Preset::Rhodes);    };
+    wurlitzerButton.onClick = [this]
+    {
+        applyPreset(Preset::Wurlitzer);
+        presetBox.setSelectedId(1, juce::dontSendNotification);
+        presetDeleteButton.setEnabled(false);
+    };
+    rhodesButton.onClick = [this]
+    {
+        applyPreset(Preset::Rhodes);
+        presetBox.setSelectedId(2, juce::dontSendNotification);
+        presetDeleteButton.setEnabled(false);
+    };
+
+    // ---- Preset manager (header centre) ----
+    presetBox.setTextWhenNothingSelected("Preset");
+    presetBox.setJustificationType(juce::Justification::centredLeft);
+    addAndMakeVisible(presetBox);
+    presetBox.onChange = [this] { presetBoxChanged(); };
+
+    presetSaveButton.onClick   = [this] { savePresetDialog(); };
+    presetDeleteButton.onClick = [this] { deleteSelectedPreset(); };
+    addAndMakeVisible(presetSaveButton);
+    addAndMakeVisible(presetDeleteButton);
+    populatePresetBox();
 
     // ---- Knob helpers ----
     auto setupKnob = [&](juce::Slider& s, double lo, double hi, double def, int decimals)
@@ -283,6 +305,9 @@ MainComponent::MainComponent()
     setAudioChannels(0, 2);
     openAllMidiInputs();
     applyPreset(currentPreset);
+    presetBox.setSelectedId(currentPreset == Preset::Wurlitzer ? 1 : 2,
+                            juce::dontSendNotification);
+    presetDeleteButton.setEnabled(false);
     loadState();      // restore previous session over the preset defaults
     startTimer(33);   // ~30fps; only the VU/LED dirty rects are invalidated
 }
@@ -316,7 +341,30 @@ void MainComponent::saveState()
     pf->setValue("reverb",    sliderReverbWet   .getValue());
     pf->setValue("chorus",    sliderChorus      .getValue());
     pf->setValue("master",    sliderMaster      .getValue());
+    pf->setValue("presetSel", presetBox.getText());   // remembered for the box label only
     appProperties.saveIfNeeded();
+}
+
+void MainComponent::applyKnobSnapshot(double fmDepth, double attack, double release,
+                                      double drive, double tremRate, double tremDepth,
+                                      double reverb, double chorus, double master,
+                                      bool setDoubleClickToThese)
+{
+    auto put = [setDoubleClickToThese](juce::Slider& s, double v)
+    {
+        s.setValue(v, juce::sendNotification);
+        if (setDoubleClickToThese)
+            s.setDoubleClickReturnValue(true, v);
+    };
+    put(sliderFMDepth,      fmDepth);
+    put(sliderAttack,       attack);
+    put(sliderRelease,      release);
+    put(sliderDrive,        drive);
+    put(sliderTremoloRate,  tremRate);
+    put(sliderTremoloDepth, tremDepth);
+    put(sliderReverbWet,    reverb);
+    put(sliderChorus,       chorus);
+    put(sliderMaster,       master);
 }
 
 void MainComponent::loadState()
@@ -330,20 +378,195 @@ void MainComponent::loadState()
     // user's saved positions so mid-session tweaks survive.
     const auto saved = (Preset) pf->getIntValue("preset", (int) Preset::Wurlitzer);
     applyPreset(saved);
+    applyKnobSnapshot(pf->getDoubleValue("fmDepth",   sliderFMDepth     .getValue()),
+                      pf->getDoubleValue("attack",    sliderAttack      .getValue()),
+                      pf->getDoubleValue("release",   sliderRelease     .getValue()),
+                      pf->getDoubleValue("drive",     sliderDrive       .getValue()),
+                      pf->getDoubleValue("tremRate",  sliderTremoloRate .getValue()),
+                      pf->getDoubleValue("tremDepth", sliderTremoloDepth.getValue()),
+                      pf->getDoubleValue("reverb",    sliderReverbWet   .getValue()),
+                      pf->getDoubleValue("chorus",    sliderChorus      .getValue()),
+                      pf->getDoubleValue("master",    sliderMaster      .getValue()),
+                      false);
 
-    auto restore = [pf](juce::Slider& s, const juce::String& key)
+    // Restore the preset-box label (selection only — the sound is already
+    // restored above, so do NOT send a change notification).
+    const auto sel = pf->getValue("presetSel");
+    bool matched = false;
+    for (int i = 0; i < presetBox.getNumItems(); ++i)
+        if (presetBox.getItemText(i) == sel)
+        {
+            presetBox.setSelectedId(presetBox.getItemId(i), juce::dontSendNotification);
+            matched = true;
+            break;
+        }
+    if (! matched)
+        presetBox.setSelectedId(saved == Preset::Wurlitzer ? 1 : 2,
+                                juce::dontSendNotification);
+    presetDeleteButton.setEnabled(presetBox.getSelectedId() >= kUserPresetIdBase);
+}
+
+// ---- Preset manager -----------------------------------------------------
+
+juce::File MainComponent::presetDirectory()
+{
+    auto* pf = appProperties.getUserSettings();
+    auto base = (pf != nullptr)
+                    ? pf->getFile().getParentDirectory()
+                    : juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
+                          .getChildFile("MySynth");
+    return base.getChildFile("Presets");
+}
+
+void MainComponent::populatePresetBox()
+{
+    presetBox.clear(juce::dontSendNotification);
+    presetBox.addItem("Wurlitzer 200A", 1);
+    presetBox.addItem("Rhodes Mark II", 2);
+
+    userPresetFiles.clear();
+    auto dir = presetDirectory();
+    if (dir.isDirectory())
     {
-        s.setValue(pf->getDoubleValue(key, s.getValue()), juce::sendNotification);
-    };
-    restore(sliderFMDepth,      "fmDepth");
-    restore(sliderAttack,       "attack");
-    restore(sliderRelease,      "release");
-    restore(sliderDrive,        "drive");
-    restore(sliderTremoloRate,  "tremRate");
-    restore(sliderTremoloDepth, "tremDepth");
-    restore(sliderReverbWet,    "reverb");
-    restore(sliderChorus,       "chorus");
-    restore(sliderMaster,       "master");
+        auto files = dir.findChildFiles(juce::File::findFiles, false, "*.preset");
+        files.sort();
+        if (files.size() > 0)
+            presetBox.addSeparator();
+        for (auto& f : files)
+        {
+            userPresetFiles.add(f);
+            presetBox.addItem(f.getFileNameWithoutExtension(),
+                              kUserPresetIdBase + userPresetFiles.size() - 1);
+        }
+    }
+}
+
+void MainComponent::presetBoxChanged()
+{
+    const int id = presetBox.getSelectedId();
+    if (id == 1)
+    {
+        applyPreset(Preset::Wurlitzer);
+        presetDeleteButton.setEnabled(false);
+    }
+    else if (id == 2)
+    {
+        applyPreset(Preset::Rhodes);
+        presetDeleteButton.setEnabled(false);
+    }
+    else if (id >= kUserPresetIdBase)
+    {
+        const int idx = id - kUserPresetIdBase;
+        if (idx >= 0 && idx < userPresetFiles.size())
+        {
+            loadUserPreset(userPresetFiles.getReference(idx));
+            presetDeleteButton.setEnabled(true);
+        }
+    }
+}
+
+void MainComponent::loadUserPreset(const juce::File& file)
+{
+    std::unique_ptr<juce::XmlElement> xml(juce::XmlDocument::parse(file));
+    if (xml == nullptr || ! xml->hasTagName("MySynthPreset"))
+        return;
+
+    const int model = xml->getIntAttribute("model", 0);
+    applyPreset(model == 1 ? Preset::Rhodes : Preset::Wurlitzer);
+    applyKnobSnapshot(xml->getDoubleAttribute("fmDepth",   sliderFMDepth     .getValue()),
+                      xml->getDoubleAttribute("attack",    sliderAttack      .getValue()),
+                      xml->getDoubleAttribute("release",   sliderRelease     .getValue()),
+                      xml->getDoubleAttribute("drive",     sliderDrive       .getValue()),
+                      xml->getDoubleAttribute("tremRate",  sliderTremoloRate .getValue()),
+                      xml->getDoubleAttribute("tremDepth", sliderTremoloDepth.getValue()),
+                      xml->getDoubleAttribute("reverb",    sliderReverbWet   .getValue()),
+                      xml->getDoubleAttribute("chorus",    sliderChorus      .getValue()),
+                      xml->getDoubleAttribute("master",    sliderMaster      .getValue()),
+                      true);   // double-click reverts to this preset's saved values
+}
+
+void MainComponent::writePreset(const juce::String& name)
+{
+    const auto trimmed = name.trim();
+    if (trimmed.isEmpty())
+        return;
+
+    auto dir = presetDirectory();
+    dir.createDirectory();
+    auto file = dir.getChildFile(juce::File::createLegalFileName(trimmed) + ".preset");
+
+    juce::XmlElement xml("MySynthPreset");
+    xml.setAttribute("name",      trimmed);
+    xml.setAttribute("model",     (int) currentPreset);
+    xml.setAttribute("fmDepth",   sliderFMDepth     .getValue());
+    xml.setAttribute("attack",    sliderAttack      .getValue());
+    xml.setAttribute("release",   sliderRelease     .getValue());
+    xml.setAttribute("drive",     sliderDrive       .getValue());
+    xml.setAttribute("tremRate",  sliderTremoloRate .getValue());
+    xml.setAttribute("tremDepth", sliderTremoloDepth.getValue());
+    xml.setAttribute("reverb",    sliderReverbWet   .getValue());
+    xml.setAttribute("chorus",    sliderChorus      .getValue());
+    xml.setAttribute("master",    sliderMaster      .getValue());
+    xml.writeTo(file);
+
+    populatePresetBox();
+    for (int i = 0; i < presetBox.getNumItems(); ++i)
+        if (presetBox.getItemText(i) == trimmed)
+        {
+            presetBox.setSelectedId(presetBox.getItemId(i), juce::dontSendNotification);
+            break;
+        }
+    presetDeleteButton.setEnabled(presetBox.getSelectedId() >= kUserPresetIdBase);
+}
+
+void MainComponent::savePresetDialog()
+{
+    auto* w = new juce::AlertWindow("Save Preset",
+                                    "Preset name:",
+                                    juce::MessageBoxIconType::NoIcon);
+    const auto suggested = presetBox.getSelectedId() >= kUserPresetIdBase
+                               ? presetBox.getText()
+                               : juce::String("My ") + presetBox.getText();
+    w->addTextEditor("name", suggested);
+    w->addButton("Save",   1, juce::KeyPress(juce::KeyPress::returnKey));
+    w->addButton("Cancel", 0, juce::KeyPress(juce::KeyPress::escapeKey));
+    w->enterModalState(true,
+        juce::ModalCallbackFunction::create([this, w](int result)
+        {
+            if (result == 1)
+                writePreset(w->getTextEditorContents("name"));
+            delete w;
+        }),
+        false);
+}
+
+void MainComponent::deleteSelectedPreset()
+{
+    const int id = presetBox.getSelectedId();
+    if (id < kUserPresetIdBase)
+        return;   // factory presets are not deletable
+
+    const int idx = id - kUserPresetIdBase;
+    if (idx < 0 || idx >= userPresetFiles.size())
+        return;
+
+    const auto file = userPresetFiles.getReference(idx);
+    juce::AlertWindow::showOkCancelBox(
+        juce::MessageBoxIconType::WarningIcon,
+        "Delete Preset",
+        "Delete \"" + file.getFileNameWithoutExtension() + "\"?",
+        "Delete", "Cancel", this,
+        juce::ModalCallbackFunction::create([this, file](int result)
+        {
+            if (result == 1)
+            {
+                file.deleteFile();
+                populatePresetBox();
+                presetBox.setSelectedId(currentPreset == Preset::Wurlitzer ? 1 : 2,
+                                        juce::dontSendNotification);
+                presetDeleteButton.setEnabled(false);
+            }
+        }));
 }
 
 void MainComponent::openAllMidiInputs()
@@ -1067,6 +1290,11 @@ void MainComponent::resized()
     const int btnY = 16, btnH = 32;
     rhodesButton   .setBounds(W - 14 - 96,       btnY, 96,  btnH);
     wurlitzerButton.setBounds(W - 14 - 96 - 110, btnY, 106, btnH);
+
+    // Preset manager in the free header centre (between title and models)
+    presetBox         .setBounds(344, 18, 150, 28);
+    presetSaveButton  .setBounds(500, 18,  40, 28);
+    presetDeleteButton.setBounds(544, 18,  32, 28);
 
     {
         auto keyboardArea = juce::Rectangle<int>(22, keyboardY + 8, W - 44, keyboardH - 16);

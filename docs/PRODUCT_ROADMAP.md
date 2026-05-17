@@ -36,7 +36,7 @@
 | ~~出力安全性~~ | ✅ Phase 9-2 完了: MASTER ノブ + 出力ソフトリミッタ | 済 |
 | ~~空間系~~ | ✅ Phase 9-4 完了: プリディレイ+wet高域ダンプ+センド構成、Rhodes ステレオパントレモロ | 済 |
 | ~~状態永続化~~ | ✅ Phase 9-5 完了: ApplicationProperties で終了時保存・起動時復元 | 済 |
-| **プリセット管理** | 保存・読み込み・ユーザープリセット なし | P1 |
+| ~~プリセット管理~~ | ✅ Phase 9-8 完了: ヘッダ中央 ComboBox で保存/読込/削除 (ファクトリ2+ユーザー) | 済 |
 | **MIDI** | ホットプラグ非対応 (起動後の接続無効) | P1 |
 | **ピッチベンド** | 実装済み。UI からのレンジ変更は未対応 | P1 |
 | ~~描画効率~~ | ✅ Phase 9-6 完了: 30fps dirty-rect 部分 repaint (見た目不変) | 済 |
@@ -399,7 +399,7 @@ juce_add_gui_app(ElectricPiano
 | ~~8~~ | UX | ✅ Phase 9-5 完了: 状態永続化 (ApplicationProperties、終了時保存/起動時復元) | MainComponent.* | 済 |
 | ~~9~~ | UX | ✅ Phase 9-6 完了: 30fps dirty-rect 部分描画 (子化は z 順衝突のため見送り、見た目不変で同等性能) | MainComponent.* | 済 |
 | 10a | UX | ✅ Phase 9-7 完了: ノブ UX 標準化 (既定値復帰/ホイール/微調整) | MainComponent.* | 済 |
-| 10b | UX | ユーザープリセット保存/管理 (ComboBox+SaveAs+保存先) — UI 設計判断要・要合意 | MainComponent.* | 1–2日 |
+| ~~10b~~ | UX | ✅ Phase 9-8 完了: ヘッダ中央 ComboBox で保存/読込/削除 (XML/file, ファクトリ2+ユーザー) | MainComponent.* | 済 |
 | 11 | 配布 | 製品名/Bundle ID/アイコン/署名・公証 | CMakeLists.txt 他 | 1日 + Apple Developer |
 
 ### 将来 (任意・低優先)
