@@ -228,6 +228,12 @@ MainComponent::MainComponent()
         s.setRange(lo, hi);
         s.setValue(def, juce::dontSendNotification);
         s.setNumDecimalPlacesToDisplay(decimals);
+        // Standard product knob UX: double-click resets to default;
+        // mouse-wheel adjusts; hold Cmd/Ctrl while dragging for fine control
+        // (the last is built into juce::Slider). Preset knobs get their
+        // double-click target re-pointed to the active preset in applyPreset.
+        s.setDoubleClickReturnValue(true, def);
+        s.setScrollWheelEnabled(true);
         addAndMakeVisible(s);
     };
     auto setupLabel = [&](juce::Label& l, const juce::String& text)
@@ -459,14 +465,21 @@ void MainComponent::applyPreset(Preset p)
     chorusMixAmt = d.chorusMixPct / 100.0f;
 
     // Snap knobs to preset defaults (triggers onValueChange → atomics update).
-    sliderAttack      .setValue(d.attackMs,        juce::sendNotification);
-    sliderRelease     .setValue(d.releaseMs,       juce::sendNotification);
-    sliderFMDepth     .setValue(d.fmDepthScaleX,   juce::sendNotification);
-    sliderDrive       .setValue(d.driveKnob,       juce::sendNotification);
-    sliderTremoloRate .setValue(d.tremoloRateHz,   juce::sendNotification);
-    sliderTremoloDepth.setValue(d.tremoloDepthPct, juce::sendNotification);
-    sliderReverbWet   .setValue(d.reverbWetPct,    juce::sendNotification);
-    sliderChorus      .setValue(d.chorusMixPct,    juce::sendNotification);
+    // Also re-point each knob's double-click target to this preset's value,
+    // so double-click reverts a tweak back to the active preset baseline.
+    auto snap = [](juce::Slider& s, double v)
+    {
+        s.setValue(v, juce::sendNotification);
+        s.setDoubleClickReturnValue(true, v);
+    };
+    snap(sliderAttack,       d.attackMs);
+    snap(sliderRelease,      d.releaseMs);
+    snap(sliderFMDepth,      d.fmDepthScaleX);
+    snap(sliderDrive,        d.driveKnob);
+    snap(sliderTremoloRate,  d.tremoloRateHz);
+    snap(sliderTremoloDepth, d.tremoloDepthPct);
+    snap(sliderReverbWet,    d.reverbWetPct);
+    snap(sliderChorus,       d.chorusMixPct);
 
     // Toggle state drives VintageLookAndFeel button highlight.
     bool isWurl = (p == Preset::Wurlitzer);
