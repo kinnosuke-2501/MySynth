@@ -12,8 +12,9 @@ struct SynthParams
     // ---- Preset params (instrument character) ----
     std::atomic<float> modRatio       { 2.0f };   // FM modulator freq ratio (1:1 Rhodes / 2:1 Wurlitzer)
     std::atomic<float> detuneCents    { 3.0f };   // L/R stereo spread in cents
-    std::atomic<float> carrierDecay   { 0.5f };   // carrier ADSR decay (s)
-    std::atomic<float> carrierSustain { 0.45f };  // carrier ADSR sustain level (0–1)
+    std::atomic<float> carrierDecay   { 0.5f };   // fast initial decay to the knee (s)
+    std::atomic<float> carrierSustain { 0.45f };  // knee level the fast decay settles to (0–1)
+    std::atomic<float> carrierDecay2  { 4.0f };   // slow exponential body decay after the knee (s)
     std::atomic<float> modDecay       { 0.12f };  // modulator ADSR decay (s)
     std::atomic<float> modSustain     { 0.0f };   // modulator ADSR sustain (0 = full decay)
     std::atomic<float> modRelease     { 0.06f };  // modulator ADSR release (s)
@@ -53,6 +54,107 @@ struct ElectricPianoSound : public juce::SynthesiserSound
     bool appliesToChannel(int) override { return true; }
 };
 
+// EP-style amplitude envelope.
+//
+// juce::ADSR holds a flat sustain until note-off, which makes held notes
+// sound like an organ. A real Rhodes/Wurlitzer tine/reed never sustains
+// flat — it always keeps decaying. This models that:
+//
+//   Attack  : linear ramp 0 → 1 (EP attack is near-instant)
+//   Decay1  : fast exponential approach toward `knee` (the percussive drop)
+//   Decay2  : slow exponential body decay from the knee toward silence
+//             (replaces sustain — the note "sings" then fades like the real
+//              instrument, even with the key held)
+//   Release : faster exponential decay to silence on note-off
+//
+// API mirrors juce::ADSR so it is a drop-in replacement for the carrier.
+class EpAmpEnvelope
+{
+public:
+    void setSampleRate (double sr) noexcept { sampleRate = sr > 0.0 ? sr : 44100.0; }
+
+    // Times in seconds; knee is the level Decay1 settles to (0–1).
+    void setParameters (float attack, float decay1, float kneeLevel,
+                        float decay2, float release) noexcept
+    {
+        attackSec  = juce::jmax (0.0001f, attack);
+        decay1Sec  = juce::jmax (0.0001f, decay1);
+        decay2Sec  = juce::jmax (0.01f,   decay2);
+        releaseSec = juce::jmax (0.005f,  release);
+        knee       = juce::jlimit (0.0f, 1.0f, kneeLevel);
+    }
+
+    void noteOn() noexcept
+    {
+        value     = 0.0f;
+        attackInc = 1.0f / (float) (juce::jmax (1.0e-4, (double) attackSec) * sampleRate);
+        d1Coef    = expCoef (decay1Sec);
+        d2Coef    = expCoef (decay2Sec);
+        relCoef   = expCoef (releaseSec);
+        state     = State::Attack;
+    }
+
+    void noteOff() noexcept
+    {
+        if (state != State::Idle)
+            state = State::Release;
+    }
+
+    void reset() noexcept { state = State::Idle; value = 0.0f; }
+
+    bool isActive() const noexcept { return state != State::Idle; }
+
+    float getNextSample() noexcept
+    {
+        switch (state)
+        {
+            case State::Idle:
+                return 0.0f;
+
+            case State::Attack:
+                value += attackInc;
+                if (value >= 1.0f) { value = 1.0f; state = State::Decay1; }
+                break;
+
+            case State::Decay1:
+                value = knee + (value - knee) * d1Coef;
+                if (value - knee <= 0.001f) { value = knee; state = State::Decay2; }
+                break;
+
+            case State::Decay2:
+                value *= d2Coef;
+                if (value <= kSilence) { value = 0.0f; state = State::Idle; }
+                break;
+
+            case State::Release:
+                value *= relCoef;
+                if (value <= kSilence) { value = 0.0f; state = State::Idle; }
+                break;
+        }
+        return value;
+    }
+
+private:
+    enum class State { Idle, Attack, Decay1, Decay2, Release };
+
+    // Per-sample multiplier reaching −60 dB (×0.001) in `seconds` — same
+    // idiom as the afterglow / noise-burst decays elsewhere in this file.
+    float expCoef (float seconds) const noexcept
+    {
+        return (float) std::pow (0.001,
+                                 1.0 / (sampleRate * juce::jmax (1.0e-4, (double) seconds)));
+    }
+
+    static constexpr float kSilence = 1.0e-4f;
+
+    double sampleRate = 44100.0;
+    State  state      = State::Idle;
+    float  value      = 0.0f;
+    float  attackSec  = 0.001f, decay1Sec = 0.5f, decay2Sec = 4.0f, releaseSec = 0.4f;
+    float  knee       = 0.45f;
+    float  attackInc  = 0.0f, d1Coef = 0.0f, d2Coef = 0.0f, relCoef = 0.0f;
+};
+
 // Wurlitzer 200A electric piano emulation via 2-operator FM synthesis.
 //
 // What makes Wurlitzer sound different from Rhodes:
@@ -85,8 +187,8 @@ private:
 
     SynthParams* params = nullptr;
 
-    juce::ADSR carrierEnv;
-    juce::ADSR modulatorEnv;
+    EpAmpEnvelope carrierEnv;
+    juce::ADSR    modulatorEnv;
 
     // Carrier: L and R slightly detuned (±3 cents)
     double carrierAngleL   = 0.0;

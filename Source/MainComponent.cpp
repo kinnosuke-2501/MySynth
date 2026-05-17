@@ -65,7 +65,7 @@ struct PresetData
 {
     // Voice character (FM synthesis + waveform shaping)
     float modRatio, detuneCents;
-    float carrierDecay, carrierSustain;
+    float carrierDecay, carrierSustain, carrierDecay2;
     float modDecay, modSustain, modRelease;
     float fmDepthLow, fmDepthRange, keyScaleCoeff, noiseBurstAmt;
     float carrierH2, carrierH3, carrierH5;
@@ -86,7 +86,7 @@ static const PresetData kPresetWurlitzer {
     // Character: nasal/reedy from 2:1 FM ratio; very velocity-sensitive;
     // short bark that collapses to a darker sustain tone.
     2.0f,  3.0f,               // modRatio 2:1, tight ±3-cent stereo
-    0.35f, 0.40f,              // carrier: fast decay to 40% sustain (percussive)
+    0.35f, 0.40f, 3.5f,        // carrier: fast 0.35s decay to 40% knee, then 3.5s body decay (reed is damped)
     0.08f, 0.0f, 0.04f,       // mod: crisp 80ms bark, no sustain (pure tone after bark)
     0.10f, 5.5f, 0.004f, 0.25f, // FM range starts dark at pp; key scale; loud clack
     0.04f, 0.07f, 0.02f,       // sustain harmonics stay lean; attack bloom adds the bark
@@ -106,7 +106,7 @@ static const PresetData kPresetRhodes {
     // Character: bell-like from 1:1 FM ratio; long singing sustain;
     // gentler velocity response than Wurlitzer.
     1.0f,  5.0f,               // modRatio 1:1 (bell), wider ±5-cent shimmer
-    1.5f,  0.80f,              // carrier: slow 1.5s decay to 80% sustain (rings long)
+    1.5f,  0.80f, 8.0f,        // carrier: 1.5s decay to 80% knee, then long 8s body decay (tine sings)
     0.20f, 0.15f, 0.15f,      // mod: 200ms bark with 15% sustain (brightness lingers)
     0.20f, 2.2f, 0.0015f, 0.12f, // narrower FM range; minimal key scale; soft clack
     0.03f, 0.05f, 0.00f,       // harmonic mix: light upper partials, near-sine tine core
@@ -319,6 +319,7 @@ void MainComponent::applyPreset(Preset p)
     synthParams.detuneCents    = d.detuneCents;
     synthParams.carrierDecay   = d.carrierDecay;
     synthParams.carrierSustain = d.carrierSustain;
+    synthParams.carrierDecay2  = d.carrierDecay2;
     synthParams.modDecay       = d.modDecay;
     synthParams.modSustain     = d.modSustain;
     synthParams.modRelease     = d.modRelease;

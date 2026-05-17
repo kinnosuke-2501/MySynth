@@ -112,6 +112,7 @@ void ElectricPianoVoice::startNote(int midiNoteNumber, float velocity,
     const float detuneCents  = params ? params->detuneCents.load()    : 3.0f;
     const float cDecay       = params ? params->carrierDecay.load()   : 0.35f;
     const float cSustain     = params ? params->carrierSustain.load() : 0.40f;
+    const float cDecay2      = params ? params->carrierDecay2.load()  : 4.0f;
     const float mDecay       = params ? params->modDecay.load()       : 0.08f;
     const float mSustain     = params ? params->modSustain.load()     : 0.0f;
     const float mRelease     = params ? params->modRelease.load()     : 0.04f;
@@ -156,7 +157,7 @@ void ElectricPianoVoice::startNote(int midiNoteNumber, float velocity,
 
     carrierEnv.setSampleRate(getSampleRate());
     modulatorEnv.setSampleRate(getSampleRate());
-    carrierEnv.setParameters  ({attackSec, cDecay, cSustain, releaseSec});
+    carrierEnv.setParameters  (attackSec, cDecay, cSustain, cDecay2, releaseSec);
     modulatorEnv.setParameters({0.0005f, transientDecay, mSustain, mRelease});
     carrierEnv.noteOn();
     modulatorEnv.noteOn();

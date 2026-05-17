@@ -10,6 +10,7 @@ macOS 向けのスタンドアローン電子ピアノ音源です。JUCE 8 と 
 - 2-op FM をベースにした電子ピアノ音源
 - 奇数倍音、buzz、ベロシティ音色カーブ、pitch bend、afterglow、sympathetic resonance を含む音色ブラッシュアップ
 - ボイス生成の 2× オーバーサンプリングによるアンチエイリアス、位相ラップ、DC ブロッカー
+- EP らしい 2段指数ディケイ振幅エンベロープ (フラット sustain を廃し自然に減衰)
 - Chorus / Tremolo / Reverb のエフェクトチェーン
 - サステインペダル (CC#64) 対応 + ペダルノイズ
 - VintageLookAndFeel (真鍮ノブ・ビンテージ配色) + VU メーター + LED インジケータ
