@@ -39,7 +39,7 @@
 | **プリセット管理** | 保存・読み込み・ユーザープリセット なし | P1 |
 | **MIDI** | ホットプラグ非対応 (起動後の接続無効) | P1 |
 | **ピッチベンド** | 実装済み。UI からのレンジ変更は未対応 | P1 |
-| **描画効率** | 12fps 全面 repaint。VU/LED を独立コンポーネント化し 30fps 部分描画へ | P1 |
+| ~~描画効率~~ | ✅ Phase 9-6 完了: 30fps dirty-rect 部分 repaint (見た目不変) | 済 |
 | **ノブ UX** | ダブルクリック既定値復帰 / shift 微調整 / MIDIラーン 未設定 | P2 |
 | **アクセシビリティ** | `g.drawText` のシルクスクリーン文字が VoiceOver 不可視 | P2 |
 | **フォント** | システムフォント依存 (未埋め込み) | P2 |
@@ -397,7 +397,7 @@ juce_add_gui_app(ElectricPiano
 | ~~6~~ | 音 | ✅ Phase 9-2 完了: MASTER ノブ + 出力ソフトリミッタ | MainComponent.h/cpp | 済 |
 | ~~7~~ | 音 | ✅ Phase 9-4 完了: リバーブ刷新 (プリディレイ/wet高域ダンプ/センド) + Rhodes パントレモロ | MainComponent.* | 済 |
 | ~~8~~ | UX | ✅ Phase 9-5 完了: 状態永続化 (ApplicationProperties、終了時保存/起動時復元) | MainComponent.* | 済 |
-| 9 | UX | VU/LED を独立コンポーネント化し 30fps 部分描画 | MainComponent.* | 0.5日 |
+| ~~9~~ | UX | ✅ Phase 9-6 完了: 30fps dirty-rect 部分描画 (子化は z 順衝突のため見送り、見た目不変で同等性能) | MainComponent.* | 済 |
 | 10 | UX | ノブ UX 標準化 (既定値復帰/微調整) + プリセット保存 | MainComponent.* | 1–2日 |
 | 11 | 配布 | 製品名/Bundle ID/アイコン/署名・公証 | CMakeLists.txt 他 | 1日 + Apple Developer |
 
@@ -408,6 +408,7 @@ juce_add_gui_app(ElectricPiano
 | 12 | MIDI ホットプラグ対応 | 3h |
 | 13 | 比率ベースレイアウト化 (リサイズ復活させる場合) | 1日 |
 | 14 | アクセシビリティ (VoiceOver) / フォント埋め込み | 1日 |
+| 16 | ヘッダ UI レイアウト見直し (LED クラスタと ROADS ボタンの矩形重なり解消) | 0.5日 |
 | 15 | モジュレータ・フィードバック (DX系 EP の噛み付き) | 0.5日 |
 
 ---

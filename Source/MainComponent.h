@@ -125,6 +125,12 @@ private:
     // VU meter level (RMS, written from audio thread)
     std::atomic<float> vuLevel { 0.0f };
 
+    // timerCallback() change-detection state (drives partial repaints)
+    int   statusTick      = 0;
+    bool  lastLedActive   = false;
+    bool  lastLedSustain  = false;
+    float lastVuNorm      = -1.0f;
+
     VintageLookAndFeel vintageTheme;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MainComponent)

@@ -278,7 +278,7 @@ MainComponent::MainComponent()
     openAllMidiInputs();
     applyPreset(currentPreset);
     loadState();      // restore previous session over the preset defaults
-    startTimer(80);   // ~12fps repaint for VU meter
+    startTimer(33);   // ~30fps; only the VU/LED dirty rects are invalidated
 }
 
 MainComponent::~MainComponent()
@@ -374,8 +374,47 @@ void MainComponent::updateMidiStatus()
 
 void MainComponent::timerCallback()
 {
-    updateMidiStatus();
-    repaint();
+    // The old design did a full-window repaint at 12fps just to animate the
+    // VU bar + LEDs — repainting the static walnut chrome/text every tick.
+    // Now we run at ~30fps and invalidate ONLY the two small dynamic strips,
+    // and only when they actually change. JUCE clips paint() to those rects,
+    // so the heavy static drawing is skipped at raster level. (Full
+    // child-componentisation was avoided because the LED cluster overlaps the
+    // preset button in z-order — see docs; that needs a UI-layout pass.)
+
+    // Status text changes rarely — refresh ~2×/s, not every tick.
+    if (++statusTick >= 15)
+    {
+        statusTick = 0;
+        updateMidiStatus();
+    }
+
+    const int W = getWidth();
+    const int H = getHeight();
+
+    // Mirror paint()'s footer geometry so the dirty rect lines up exactly.
+    auto keyboardBay = keyboardComponent.getBounds().expanded(8, 8);
+    if (keyboardBay.isEmpty())
+        keyboardBay = { 14, 66 + 190 + 16, W - 28, juce::jlimit(72, 96, H / 6) };
+    const int footerTop = keyboardBay.getBottom() + 16;
+
+    const bool ledA = activeNoteCount.get() > 0;
+    const bool ledS = sustainPedalDown.get() != 0;
+    if (ledA != lastLedActive || ledS != lastLedSustain)
+    {
+        lastLedActive  = ledA;
+        lastLedSustain = ledS;
+        repaint(W - 52, 4, 46, 28);             // LED cluster only
+    }
+
+    const float norm = juce::jlimit(0.0f, 1.0f,
+        juce::jmap(20.0f * std::log10(juce::jmax(vuLevel.load(), 1.0e-5f)),
+                   -42.0f, 0.0f, 0.0f, 1.0f));
+    if (std::abs(norm - lastVuNorm) > 0.002f)
+    {
+        lastVuNorm = norm;
+        repaint(6, footerTop + 2, W - 8, 32);   // VU strip only
+    }
 }
 
 void MainComponent::applyPreset(Preset p)
