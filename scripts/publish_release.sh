@@ -41,15 +41,33 @@ cp -R site/. "$tmp"/
     git checkout -q -b gh-pages
     git add -A
     git -c user.email="deploy@local" -c user.name="deploy" commit -qm "site ${ver}"
-    git push -q -f "https://github.com/${slug}.git" gh-pages
+    git push -q -f "https://x-access-token:$(gh auth token)@github.com/${slug}.git" gh-pages
 )
 rm -rf "$tmp"
 
-echo "==> Enable GitHub Pages (gh-pages branch, idempotent)"
-gh api -X POST "repos/${slug}/pages" -f "source[branch]=gh-pages" -f "source[path]=/" >/dev/null 2>&1 \
-  || gh api -X PUT "repos/${slug}/pages" -f "source[branch]=gh-pages" -f "source[path]=/" >/dev/null 2>&1 \
-  || true
+echo "==> Enable GitHub Pages (gh-pages branch)"
+pages_body='{"source":{"branch":"gh-pages","path":"/"}}'
+if echo "$pages_body" | gh api -X POST "repos/${slug}/pages" --input - >/dev/null 2>&1 \
+   || gh api "repos/${slug}/pages" >/dev/null 2>&1; then
+    pages_ok=1
+else
+    pages_ok=0
+fi
+
+is_private="$(gh repo view "${slug}" --json isPrivate -q .isPrivate)"
 
 echo
 echo "Release : https://github.com/${slug}/releases/latest"
-echo "Web page: https://${owner}.github.io/${repo}/   (Pages build takes ~1 min)"
+if [[ "$pages_ok" == 1 ]]; then
+    echo "Web page: https://${owner}.github.io/${repo}/   (Pages build takes ~1 min)"
+else
+    echo "Web page: NOT enabled."
+    if [[ "$is_private" == "true" ]]; then
+        echo "  Reason: the repo is PRIVATE. On the free plan, GitHub Pages AND"
+        echo "  public release downloads require a PUBLIC repo. Options:"
+        echo "   - make the repo public:  gh repo edit ${slug} --visibility public"
+        echo "     then re-run this script, OR"
+        echo "   - just hand dist/StageFM-*-macOS.zip to friends directly"
+        echo "     (AirDrop / email / Drive) — no GitHub needed."
+    fi
+fi

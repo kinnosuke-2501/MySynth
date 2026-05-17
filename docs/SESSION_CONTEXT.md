@@ -287,6 +287,12 @@ Modulator (倍音エンベロープ): attack=0.5ms, decay=120ms, sustain=0%, rel
 | 署名 | 未署名のまま (友達配布には右クリック→開くで十分)。Gatekeeper 警告完全解消は Apple Developer Program($99/年) 署名・公証で将来対応 |
 | 関連 | `run_debug.sh`/README/.gitignore を新 .app 名・新生成物に追従 |
 
+> **公開完了 (2026-05-17)**: リポジトリを **public 化**（ユーザー合意。無料プランの
+> private は Pages 不可・Release も匿名 DL 不可と判明したため）。`publish_release.sh`
+> 実行で Release v1.0.0 公開＋`gh-pages`＋Pages 有効化。検証: 匿名で zip DL = HTTP 200、
+> 配布ページ <https://kinnosuke-2501.github.io/MySynth/> = HTTP 200。友達には URL 送付のみ。
+> 注意点: コミット履歴の作者メールも公開。public 化は実質取り消し不可。
+>
 > Phase B (プラグイン化: `juce_add_plugin` で AU+VST3+Standalone、AudioProcessor 移行)
 > と Phase C (Windows) は未着手。Logic は AU のみ対応、Windows DAW は VST3。
 

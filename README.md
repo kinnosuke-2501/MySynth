@@ -60,7 +60,8 @@ open "build/MySynth_artefacts/Debug/StageFM.app"
 
 - `package_release.sh`: Apple Silicon / Intel 両対応（Universal, macOS 11+）の `.app` を zip 化。
 - `publish_release.sh`: **外向き公開**。GitHub Release 作成と `site/` を `gh-pages` へデプロイ、Pages 有効化。
-- 配布ページ: `https://kinnosuke-2501.github.io/MySynth/`（インストール手順入り。`site/index.html`）。
+- 公開中（リポジトリは public）：配布ページ <https://kinnosuke-2501.github.io/MySynth/> ／ Release <https://github.com/kinnosuke-2501/MySynth/releases/latest> （匿名ダウンロード可・友達にこの URL を送るだけ）。`site/index.html` を編集して再 `publish` で更新。
+- 注意: GitHub Pages と公開 Release は **public リポジトリ**が前提（無料プランの private は不可）。
 - 未署名のため初回は **右クリック →「開く」** が必要（ページに手順記載）。警告を消すには Apple Developer Program 署名・公証が必要（将来）。
 - アプリアイコン: `Assets/icon_1024.png`（`Assets/make_icon.py` で再生成可）。
 
