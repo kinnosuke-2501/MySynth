@@ -60,7 +60,7 @@ private:
     std::atomic<float> reverbWetAmt    { 0.35f };
     std::atomic<bool>  reverbDirty     { false };
     std::atomic<float> chorusMixAmt    { 0.08f };  // updated per preset
-    std::atomic<float> masterGain      { 0.8f };   // global output level (NOT reset per preset)
+    std::atomic<float> masterGain      { 3.6f };   // = slider 60% × kMasterMaxGain; global, NOT reset per preset
     std::atomic<int>   pendingPedalNoise { 0 };    // +1 pedal down, -1 pedal up
     float              lastChorusMix   { -1.0f };  // tracks last applied value
 

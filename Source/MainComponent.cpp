@@ -2,6 +2,12 @@
 
 static constexpr int kNumVoices = 16;
 
+// MASTER knob 0–100% maps to gain 0..kMasterMaxGain. The wide range gives a
+// clean loud region at low/mid settings and lets DRIVE + a high MASTER push
+// the signal into the final soft-clip — i.e. the real Wurlitzer's built-in
+// amp overdrive, on purpose.
+static constexpr float kMasterMaxGain = 6.0f;
+
 namespace
 {
 struct InstrumentSpec
@@ -86,17 +92,18 @@ static const PresetData kPresetWurlitzer {
     // Character: nasal/reedy from 2:1 FM ratio; very velocity-sensitive;
     // short bark that collapses to a darker sustain tone.
     2.0f,  3.0f,               // modRatio 2:1, tight ±3-cent stereo
-    0.35f, 0.40f, 3.5f,        // carrier: fast 0.35s decay to 40% knee, then 3.5s body decay (reed is damped)
+    0.55f, 0.60f, 3.5f,        // carrier: gentle 0.55s decay to 0.60 knee, then 3.5s body
+                               //  (real reed amplitude is ~single exp — avoid attack thump)
     0.08f, 0.0f, 0.04f,       // mod: crisp 80ms bark, no sustain (pure tone after bark)
-    0.10f, 5.5f, 0.004f, 0.25f, // FM range starts dark at pp; key scale; loud clack
+    0.10f, 5.5f, 0.004f, 0.16f, // FM range starts dark at pp; key scale; realistic hammer noise
     0.04f, 0.07f, 0.02f,       // sustain harmonics stay lean; attack bloom adds the bark
     1.35f,                     // satDrive: stronger pickup bite than Rhodes
-    0.72f, 0.62f,              // asymmetric reed shaping + transient bark bloom
+    0.72f, 0.42f,              // asymmetric reed shaping + (tamed) transient bark bloom
     2.0f,                      // velPow: quadratic — very touch-sensitive
     0.58f, 9.5f,               // tone S-curve: soft lows, bright mid-velocity bark
     0.0f, 0.18f, 4.0f,         // no bell afterglow on Wurlitzer
     0.0f, 3.0f,                // no pedal resonance on Wurlitzer
-    1.0f, 400.0f, 1.0f, 1.2f, // attack, release, FM scale, drive knob
+    4.0f, 400.0f, 1.0f, 1.2f, // attack 4ms (real reed rise rounds the spike), release, FM, drive
     5.0f, 28.0f, 18.0f,        // tremolo 5Hz/28% (signature Wurlitzer tremolo); drier room
     2.0f,                      // chorusMix: nearly dry to avoid dated soft-synth sheen
 };
@@ -241,7 +248,7 @@ MainComponent::MainComponent()
     setupKnob(sliderTremoloDepth, 0.0,  50.0, 25.0,  0);  sliderTremoloDepth.setTextValueSuffix("%");
     setupKnob(sliderReverbWet,    0.0,  60.0, 35.0,  0);  sliderReverbWet   .setTextValueSuffix("%");
     setupKnob(sliderChorus,       0.0,  50.0,  2.0,  0);  sliderChorus      .setTextValueSuffix("%");
-    setupKnob(sliderMaster,       0.0, 100.0, 80.0,  0);  sliderMaster      .setTextValueSuffix("%");
+    setupKnob(sliderMaster,       0.0, 100.0, 60.0,  0);  sliderMaster      .setTextValueSuffix("%");
 
     setupLabel(labelTremoloRate,  "TREM RATE");
     setupLabel(labelTremoloDepth, "TREM DEPTH");
@@ -255,7 +262,7 @@ MainComponent::MainComponent()
                                                 reverbDirty     = true; };
     sliderChorus      .onValueChange = [this] { chorusMixAmt    = (float)sliderChorus      .getValue() / 100.0f; };
     // Master is a global output control — deliberately NOT snapped in applyPreset.
-    sliderMaster      .onValueChange = [this] { masterGain      = (float)sliderMaster      .getValue() / 100.0f; };
+    sliderMaster      .onValueChange = [this] { masterGain      = (float)sliderMaster      .getValue() / 100.0f * kMasterMaxGain; };
 
     setSize(800, 520);
     setAudioChannels(0, 2);
@@ -649,7 +656,7 @@ void MainComponent::getNextAudioBlock(const juce::AudioSourceChannelInfo& buffer
         const float g = masterGain.load();
         auto softClip = [](float x) noexcept
         {
-            constexpr float t = 0.8f;                 // linear region
+            constexpr float t = 0.7f;                 // clean below ±0.7; amp-style soft drive above
             const float a = std::abs(x);
             if (a <= t) return x;
             const float shaped = t + (1.0f - t) * std::tanh((a - t) / (1.0f - t));
