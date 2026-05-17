@@ -384,14 +384,28 @@ void MainComponent::applyPreset(Preset p)
 void MainComponent::prepareToPlay(int samplesPerBlockExpected, double sampleRate)
 {
     currentSampleRate = sampleRate;
-    synthesiser.setCurrentPlaybackSampleRate(sampleRate);
-    midiCollector.reset(sampleRate);
+
+    // The synth (and its MIDI timing) run in the oversampled domain.
+    // Voice code is all getSampleRate()-relative, so pitch/ADSR/decay scale
+    // automatically. FX below stay at base rate (post-decimation).
+    const double osRate = sampleRate * (double) (1 << kOversampleFactorLog2);
+    synthesiser.setCurrentPlaybackSampleRate(osRate);
+    midiCollector.reset(osRate);
+
+    oversampling.reset();
+    oversampling.initProcessing((size_t) samplesPerBlockExpected);
+
     pedalNoiseEnv = 0.0f;
     pedalNoiseDecay = 0.0f;
     pedalNoiseFilter = 0.0f;
     pedalNoiseDirection = 0.0f;
     pedalNoiseThumpPhase = 0.0;
     pedalNoiseThumpDelta = 0.0;
+
+    dcBlockR = juce::jlimit (0.9f, 0.99999f,
+                             1.0f - juce::MathConstants<float>::twoPi * 20.0f / (float) sampleRate);
+    dcBlockX1[0] = dcBlockX1[1] = 0.0f;
+    dcBlockY1[0] = dcBlockY1[1] = 0.0f;
 
     juce::dsp::ProcessSpec spec;
     spec.sampleRate       = sampleRate;
@@ -454,8 +468,11 @@ void MainComponent::getNextAudioBlock(const juce::AudioSourceChannelInfo& buffer
 
     bufferToFill.clearActiveBufferRegion();
 
+    const int osFactor     = 1 << kOversampleFactorLog2;
+    const int osNumSamples = bufferToFill.numSamples * osFactor;
+
     juce::MidiBuffer queuedMidi;
-    midiCollector.removeNextBlockOfMessages(queuedMidi, bufferToFill.numSamples);
+    midiCollector.removeNextBlockOfMessages(queuedMidi, osNumSamples);
 
     juce::MidiBuffer playableMidi;
     for (const auto metadata : queuedMidi)
@@ -469,7 +486,7 @@ void MainComponent::getNextAudioBlock(const juce::AudioSourceChannelInfo& buffer
         }
     }
 
-    keyboardState.processNextMidiBuffer(playableMidi, 0, bufferToFill.numSamples, true);
+    keyboardState.processNextMidiBuffer(playableMidi, 0, osNumSamples, true);
 
     int noteDelta = 0;
     for (const auto metadata : playableMidi)
@@ -484,8 +501,53 @@ void MainComponent::getNextAudioBlock(const juce::AudioSourceChannelInfo& buffer
     if (noteDelta != 0)
         activeNoteCount.set(juce::jmax(0, activeNoteCount.get() + noteDelta));
 
-    synthesiser.renderNextBlock(*bufferToFill.buffer, playableMidi,
-                                bufferToFill.startSample, bufferToFill.numSamples);
+    // ── Oversampled voice generation ──────────────────────────────────────
+    // Upsample the (silent) base region to a 2×-length block, render the
+    // synth into it at 2×fs, then decimate back. Only the voice is
+    // oversampled; the FX chain below runs at base rate.
+    {
+        juce::dsp::AudioBlock<float> baseBlock (*bufferToFill.buffer);
+        baseBlock = baseBlock.getSubBlock ((size_t) bufferToFill.startSample,
+                                           (size_t) bufferToFill.numSamples);
+
+        auto osBlock = oversampling.processSamplesUp (baseBlock);   // silent → silent, 2× len
+
+        const int osChannels = (int) osBlock.getNumChannels();
+        float*    osPtrs[2]  = { nullptr, nullptr };
+        for (int ch = 0; ch < osChannels && ch < 2; ++ch)
+            osPtrs[ch] = osBlock.getChannelPointer ((size_t) ch);
+
+        juce::AudioBuffer<float> osBuffer (osPtrs, juce::jmin (osChannels, 2),
+                                           (int) osBlock.getNumSamples());
+
+        synthesiser.renderNextBlock (osBuffer, playableMidi, 0,
+                                     (int) osBlock.getNumSamples());
+
+        oversampling.processSamplesDown (baseBlock);   // anti-alias decimation → base rate
+    }
+
+    // DC blocker: y[n] = x[n] - x[n-1] + R·y[n-1]. Removes the offset from
+    // asymmetric reed shaping before it reaches the chorus/reverb tail.
+    {
+        const int nCh = juce::jmin (2, bufferToFill.buffer->getNumChannels());
+        for (int ch = 0; ch < nCh; ++ch)
+        {
+            float* d  = bufferToFill.buffer->getWritePointer (ch);
+            float  x1 = dcBlockX1[ch];
+            float  y1 = dcBlockY1[ch];
+            for (int i = 0; i < bufferToFill.numSamples; ++i)
+            {
+                const int   idx = bufferToFill.startSample + i;
+                const float x   = d[idx];
+                const float y   = x - x1 + dcBlockR * y1;
+                x1 = x;
+                y1 = y;
+                d[idx] = y;
+            }
+            dcBlockX1[ch] = x1;
+            dcBlockY1[ch] = y1;
+        }
+    }
 
     // Effects chain: Chorus → Tremolo → Reverb
     {
@@ -592,6 +654,7 @@ void MainComponent::getNextAudioBlock(const juce::AudioSourceChannelInfo& buffer
 
 void MainComponent::releaseResources()
 {
+    oversampling.reset();
     fxChorus.reset();
     fxReverb.reset();
 }

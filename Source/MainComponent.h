@@ -35,6 +35,16 @@ private:
     // Shared synth voice parameters (UI thread writes, audio thread reads)
     SynthParams synthParams;
 
+    // 2× oversampling of the voice generation only. FM + 3rd/5th harmonic
+    // injection + asymmetric tanh + reed buzz + saturation all alias badly at
+    // base rate; the synth renders at 2×fs and a half-band polyphase IIR
+    // (low latency) decimation filter removes the folded partials. FX run at
+    // base rate post-decimation (they are not aliasing sources).
+    static constexpr int kOversampleFactorLog2 = 1;   // 1 → 2×
+    juce::dsp::Oversampling<float> oversampling
+        { 2, kOversampleFactorLog2,
+          juce::dsp::Oversampling<float>::filterHalfBandPolyphaseIIR, true, false };
+
     // Effects chain: Chorus → Tremolo → Reverb
     juce::dsp::Chorus<float>  fxChorus;
     juce::dsp::Reverb         fxReverb;
@@ -60,6 +70,13 @@ private:
     double pedalNoiseThumpPhase{ 0.0 };
     double pedalNoiseThumpDelta{ 0.0 };
     juce::Random pedalNoiseRng;
+
+    // DC blocker (one-pole HPF, ~20 Hz). Asymmetric reed shaping injects a
+    // small offset; strip it before the chorus/reverb so DC can't accumulate
+    // in the tail. State is touched only on the audio thread.
+    float dcBlockR  = 0.9975f;          // recomputed from sample rate
+    float dcBlockX1[2] { 0.0f, 0.0f };
+    float dcBlockY1[2] { 0.0f, 0.0f };
 
     // MidiInput::openDevice で直接開いたデバイスを保持
     std::vector<std::unique_ptr<juce::MidiInput>> midiInputs;

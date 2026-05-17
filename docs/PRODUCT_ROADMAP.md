@@ -1,8 +1,14 @@
 # Product Quality Roadmap — Electric Piano Synth
 
-策定日: 2026-05-17  
+策定日: 2026-05-17 / 最終更新: 2026-05-17 (Phase 8 完了時点)  
 対象: macOS Standalone JUCE C++ 音源 (Wurlitzer / Rhodes)  
 目標: Arturia V Collection レベルのプロダクト品質・UI/UX
+
+> **最新状況 (2026-05-17):** Phase 6 (音色) / Phase 7 (UI/UX 全面リデザイン) 完了。
+> レビューに基づく「正しさ三点パック」(位相ラップ・DCブロッカー・ウィンドウ固定サイズ)
+> と **ボイス生成の 2× オーバーサンプリング** (Phase 8) を実装済み。
+> 本ロードマップの旧 Phase 6/7 記述・「ビンテージ感ゼロ/固定700×420」等は達成済みのため
+> §1 と §5 を改訂。詳細実装ログは `SESSION_CONTEXT.md` を参照。
 
 ---
 
@@ -13,27 +19,32 @@
 | カテゴリ | 内容 | 評価 |
 |---|---|---|
 | 音声合成 | 2-op FM + ノイズバースト + ステレオデチューン | 良好 |
-| エフェクト | Chorus → Tremolo → Reverb チェーン | 良好 |
+| アンチエイリアス | ボイス生成の 2× オーバーサンプリング (Phase 8) | 良好 |
+| 信号の正しさ | 位相ラップ + DC ブロッカー (Phase 8) | 良好 |
+| エフェクト | Chorus → Tremolo → Reverb チェーン | 良好 (リバーブ品質は要刷新) |
 | プリセット | Wurlitzer 200A / Rhodes Mark II | 基本実装済み |
-| UI | 7ノブ + ステータス表示 + LED | 最低限 |
-| MIDI | 全デバイス自動オープン / サステインペダル | 良好 |
+| UI | VintageLookAndFeel + 800×520 + 8ノブ + VU メーター (Phase 7) | プロ水準の土台あり |
+| MIDI | 全デバイス自動オープン / サステインペダル / pitch bend | 良好 (ホットプラグ未対応) |
 | スレッド安全性 | atomic + midiCollector | 良好 |
-| 音色ブラッシュアップ | 奇数倍音追加、音域依存トランジェント補正、ベロシティ音色S字カーブ | Phase 6-1 着手済み |
-| 音色ブラッシュアップ | Wurlitzer buzz、pitch bend、Rhodes note-off afterglow | Phase 6-4 一部完了 |
+| 音色ブラッシュアップ | 奇数倍音、buzz、velocity S字、afterglow、resonance、pedal noise | Phase 6 完了 |
 
-### 未達・課題
+### 未達・課題 (Phase 8 完了時点)
 
 | カテゴリ | 問題 | 優先度 |
 |---|---|---|
-| **音色** | Phase 6 は主要項目を実装済み。残タスクは Wurlitzer/Rhodes の質感調整 | P0 |
-| **UI/UX** | 固定サイズ 700×420、ビンテージ感ゼロ、情報密度低 | P0 |
+| **振幅エンベロープ** | 線形ADSR・フラットsustainで「オルガンっぽさ」。2段指数ディケイ未実装 | P0 |
+| **出力安全性** | マスターボリューム / 出力リミッタ未実装、クリップし得る | P0 |
+| **空間系** | Freeverb は箱鳴り。プリディレイ/トーン無し。Rhodesはパントレモロ未対応 (ドリームポップ狙いの要) | P0 |
 | **状態永続化** | 起動ごとにパラメータがリセットされる | P1 |
 | **プリセット管理** | 保存・読み込み・ユーザープリセット なし | P1 |
 | **MIDI** | ホットプラグ非対応 (起動後の接続無効) | P1 |
 | **ピッチベンド** | 実装済み。UI からのレンジ変更は未対応 | P1 |
-| **マスターボリューム** | 未実装 | P2 |
-| **配布** | 未署名・未公証 (Gatekeeper ブロック) | P2 |
-| **アイコン** | デフォルトアイコン | P3 |
+| **描画効率** | 12fps 全面 repaint。VU/LED を独立コンポーネント化し 30fps 部分描画へ | P1 |
+| **ノブ UX** | ダブルクリック既定値復帰 / shift 微調整 / MIDIラーン 未設定 | P2 |
+| **アクセシビリティ** | `g.drawText` のシルクスクリーン文字が VoiceOver 不可視 | P2 |
+| **フォント** | システムフォント依存 (未埋め込み) | P2 |
+| **配布** | 未署名・未公証 (Gatekeeper ブロック)、製品名/ID/アイコン未整備 | P2 |
+| **レイアウト負債** | `paint`/`resized` の幾何二重計算 (固定サイズ化で実害は消失、整理は将来) | P3 |
 
 ---
 
@@ -363,37 +374,41 @@ juce_add_gui_app(ElectricPiano
 
 ## 5. 実装優先順位 (アクションアイテム)
 
-### 即座に着手すべき (1–2週間)
+### ✅ 完了済み (Phase 6–8)
 
-| # | タスク | ファイル | 工数 |
-|---|---|---|---|
-| 1 | `renderNextBlock` の angle wrapping バグ修正 | SynthVoice.cpp | 0.5h |
-| 2 | `driveNorm` 未使用変数の除去 | SynthVoice.cpp | 0.1h |
-| 3 | ピッチベンド実装 | SynthVoice.h/cpp | 2h |
-| 4 | `std::tanh` ベース reedBuzz に satDrive を置き換え | SynthVoice.cpp | 1h |
-| 5 | MIDI ホットプラグ対応 | MainComponent.cpp | 3h |
-| 6 | マスターボリュームノブ追加 | MainComponent.h/cpp | 1h |
+| 旧# | タスク | 状態 |
+|---|---|---|
+| 1 | `renderNextBlock` の angle wrapping | ✅ Phase 8 (位相ラップ) |
+| 2 | `driveNorm` 未使用変数 | ✅ 解消済み (現コードに存在せず) |
+| 3 | ピッチベンド実装 | ✅ Phase 6-3 |
+| 4 | `tanh` ベース reedBuzz | ✅ Phase 6-2 |
+| 7 | `VintageLookAndFeel` クラス | ✅ Phase 7 |
+| 8 | 800×520 化 | ✅ Phase 7 (固定サイズで確定 — Phase 8) |
+| 9 | VU メーター | ✅ Phase 7 |
+| 10 | LED デザイン改善 | ✅ Phase 7 |
+| 12 | 倍音構造改善 (3/5次) | ✅ Phase 6-1 |
+| — | DC ブロッカー / 2× オーバーサンプリング | ✅ Phase 8 (レビュー由来) |
 
-### 中期 (2–4週間)
+### 次に着手すべき (レビュー由来・優先順)
+
+| # | トラック | タスク | ファイル | 工数 |
+|---|---|---|---|---|
+| 5 | 音 | 2段指数ディケイ (線形ADSR置換、フラットsustain解消) | SynthVoice.cpp | 1日 |
+| 6 | 音 | マスターボリューム + 出力ソフトリミッタ | MainComponent.h/cpp | 0.5日 |
+| 7 | 音 | リバーブ刷新 (プリディレイ/高域ダンプ) + Rhodes パントレモロ | MainComponent.cpp | 1–2日 |
+| 8 | UX | 状態永続化 (ApplicationProperties) | MainComponent.cpp | 0.5日 |
+| 9 | UX | VU/LED を独立コンポーネント化し 30fps 部分描画 | MainComponent.* | 0.5日 |
+| 10 | UX | ノブ UX 標準化 (既定値復帰/微調整) + プリセット保存 | MainComponent.* | 1–2日 |
+| 11 | 配布 | 製品名/Bundle ID/アイコン/署名・公証 | CMakeLists.txt 他 | 1日 + Apple Developer |
+
+### 将来 (任意・低優先)
 
 | # | タスク | 工数 |
 |---|---|---|
-| 7 | `VintageLookAndFeel` クラス作成 (カスタムノブ描画) | 1日 |
-| 8 | ウィンドウサイズを 800×520 に拡大 + 比率ベースレイアウト | 2h |
-| 9 | VU メーター実装 | 4h |
-| 10 | LED デザイン改善 (ビンテージ電球風) | 2h |
-| 11 | ApplicationProperties でパラメータ永続化 | 4h |
-| 12 | 倍音構造改善 (3次・5次倍音追加) | 3h |
-
-### 長期 (1–2ヶ月)
-
-| # | タスク | 工数 |
-|---|---|---|
-| 13 | プリセット保存/読み込みシステム | 2日 |
-| 14 | リサイズ対応 (min 600×400, max 1200×750) | 1日 |
-| 15 | アプリアイコン作成 | 0.5日 |
-| 16 | 製品名・Bundle ID 更新 | 0.5h |
-| 17 | コード署名・公証 | 1日 (Apple Developer Program 要加入) |
+| 12 | MIDI ホットプラグ対応 | 3h |
+| 13 | 比率ベースレイアウト化 (リサイズ復活させる場合) | 1日 |
+| 14 | アクセシビリティ (VoiceOver) / フォント埋め込み | 1日 |
+| 15 | モジュレータ・フィードバック (DX系 EP の噛み付き) | 0.5日 |
 
 ---
 

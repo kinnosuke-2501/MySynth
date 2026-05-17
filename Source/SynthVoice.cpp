@@ -290,6 +290,15 @@ void ElectricPianoVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
         carrierAngleL  += carrierDeltaL;
         carrierAngleR  += carrierDeltaR;
         modulatorAngle += modulatorDelta;
+
+        // Wrap phase into [0, 2π). Without this the double angle grows
+        // unboundedly; once cast to float in renderCarrierSample the phase
+        // resolution degrades on long-held notes (audible detune / FM noise).
+        constexpr double twoPi = juce::MathConstants<double>::twoPi;
+        while (carrierAngleL  >= twoPi) carrierAngleL  -= twoPi;
+        while (carrierAngleR  >= twoPi) carrierAngleR  -= twoPi;
+        while (modulatorAngle >= twoPi) modulatorAngle -= twoPi;
+
         ++startSample;
 
         if (!carrierEnv.isActive())

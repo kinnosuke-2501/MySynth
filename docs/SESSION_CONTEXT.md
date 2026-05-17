@@ -8,7 +8,14 @@
 
 ---
 
-## 現在の実装状態 (Phase 6-4 一部完了)
+## 現在の実装状態 (Phase 8: 正しさ + アンチエイリアス対応 — 2026-05-17)
+
+> 最新サマリ:
+>
+> - Phase 6 (音色ブラッシュアップ) / Phase 7 (UI/UX 全面リデザイン) 完了。
+> - レビューに基づき「正しさ三点パック」(位相ラップ・DCブロッカー・ウィンドウ固定サイズ化) を実施。
+> - 音質の最大改善項目として **ボイス生成の 2× オーバーサンプリング** を実装 (anti-aliasing)。
+> - 次の着手候補: 2段指数ディケイ (#5)、マスターVol+リミッタ (#6)、リバーブ刷新 (#7)。
 
 ### ビルド・起動
 
@@ -111,24 +118,54 @@ Modulator (倍音エンベロープ): attack=0.5ms, decay=120ms, sustain=0%, rel
 | Pedal noise | `MainComponent` で CC#64 のエッジを検出し、pedal down は低めの thunk、pedal up は短い click をグローバルに加算 |
 | 未実装 | pedal noise は初回実装のみ。質感の追い込みは今後の調整対象 |
 
+**Phase 7 完了 (UI/UX 全面リデザイン — 2026-05-17):**
+
+| 項目 | 内容 |
+| --- | --- |
+| VintageLookAndFeel | `Source/VintageLookAndFeel.h/cpp` 新設。真鍮ロータリーノブ・ハードウェア風ボタン・ビンテージ配色を一元管理 |
+| レイアウト | 800×520 に拡張。SOUND / FX セクション分割、ヘッダ・キーボードベイ・フッタ構成 |
+| VU メーター | オーディオスレッドで RMS を atomic 書き込み、Timer (~12fps) で dB 目盛付きグラデーションバー描画 |
+| ノブ追加 | CHORUS ノブを追加 (SOUND 4 + FX 4 の計 8 ノブ構成) |
+| LED | 発音中 (アンバー) / サステイン (シアン) のハロー付き LED |
+
+**Phase 8 完了 (正しさ三点パック + アンチエイリアス — 2026-05-17):**
+
+| 項目 | 内容 |
+| --- | --- |
+| 位相ラップ | `SynthVoice.cpp` で carrier/modulator 角度を毎サンプル `[0,2π)` に巻き戻し。ロングトーンでの float 精度劣化 (デチューン/FMノイズ) を除去 |
+| DC ブロッカー | `MainComponent` に 1次 HPF (~20Hz, サンプルレート連動)。非対称リードシェイピングの DC オフセットを synth レンダ直後・FX 前に除去 |
+| ウィンドウ固定 | `Main.cpp` を `setResizable(false,false)` に変更。「リサイズ可能なのに固定レイアウト」の破綻バグを最小リスクで解消 (商用音源と同じ固定サイズ方式) |
+| **2× オーバーサンプリング** | **ボイス生成のみ** を `juce::dsp::Oversampling` (2×, halfband polyphase IIR, 低レイテンシ) で生成→デシメート。FM + 倍音加算 + 非対称tanh + buzz + サチュレーションのエイリアシングを抑制。FX は base レート据え置きで CPU 増を生成段に限定 |
+
+> オーバーサンプリング実装の要点:
+>
+> - `prepareToPlay` で `synthesiser.setCurrentPlaybackSampleRate(2×fs)` / `midiCollector.reset(2×fs)`。ボイスは全て `getSampleRate()` 基準なのでピッチ・ADSR・ノイズ減衰が自動追従。
+> - `getNextAudioBlock` は base ブロックを `processSamplesUp` → 内部 2× バッファに synth を additive レンダ → `processSamplesDown` でアンチエイリアス・デシメート。MIDI は `osNumSamples = numSamples × 2` で取得。
+> - 既知の前提: コードベース全体がステレオ前提 (`setAudioChannels(0,2)`)。モノデバイス時のフォールバックは未対応 (Phase 8 で導入したものではなく既存の前提)。
+> - レイテンシ: IIR polyphase の付加レイテンシはごく小さく未補償 (実用上問題なし、将来 `getLatencyInSamples()` 補償を検討)。
+
 ---
 
 ## 現在のUI構成
 
+800×520 固定サイズ。VintageLookAndFeel 適用済み。
+
 ```text
-┌──────────────────────────────────────────────────────┐
-│  Electric Piano          [WURLITZER] [RHODES]  ● ●   │
-│  [status bar]                                         │
-│  [hint label]                                         │
-│                                                       │
-│  TREMOLO RATE  TREMOLO DEPTH  REVERB WET  FM DEPTH    │
-│  [knob]        [knob]         [knob]      [knob]      │
-│  ATTACK        RELEASE                                │
-│  [knob]        [knob]                                 │
-│                                                       │
-│ [Panic]                           [Settings...]       │
-└──────────────────────────────────────────────────────┘
-● = 発音中LED(緑) / サステインペダルLED(青)
+┌─────────────────────────────────────────────────────────────┐
+│  ELECTRIC PIANO                  [WURLI] [ROADS]  (SUS)(KEY) │ ヘッダ
+│  STAGE FM ELECTRIC PIANO                                     │
+├──────────────────────────┬──────────────────────────────────┤
+│  SOUND                   │  FX                               │
+│  FM DEPTH ATTACK         │  TREM RATE TREM DEPTH             │
+│  RELEASE  DRIVE          │  REVERB    CHORUS                 │
+│  [knob]×4                │  [knob]×4                         │
+├─────────────────────────────────────────────────────────────┤
+│  [ MIDI KEYBOARD (モデル別レンジ) ]                          │
+├─────────────────────────────────────────────────────────────┤
+│  [━━━━━━━━━━ VU メーター (dB目盛) ━━━━━━━━━━]                │ フッタ
+│  [Panic]   status / MODEL 名プレート     [Settings...]       │
+└─────────────────────────────────────────────────────────────┘
+LED: KEY=発音中(アンバー) / SUS=サステイン(シアン)
 ```
 
 **プリセットパラメータ差分:**
@@ -154,6 +191,9 @@ Modulator (倍音エンベロープ): attack=0.5ms, decay=120ms, sustain=0%, rel
 - **juce_audio_processors は未リンク:** 現在は `juce_gui_app` ベースのスタンドアローンアプリ。プラグイン化する場合は要追加。
 - **MIDIデバイスの自動検出:** `MidiInput::openDevice` で起動時に全デバイスを直接開く方式。ホットプラグ (起動後の接続) は非対応。
 - **サステインペダル:** `juce::Synthesiser` が CC#64 を自動処理。`midiCollector` 経由で渡しているので追加実装不要。
+- **ウィンドウサイズ:** 800×520 固定 (`setResizable(false,false)`)。比率レイアウト化は将来タスク。これに伴い `paint`/`resized` の幾何二重計算は実害のないコスメティック負債に格下げ。
+- **ステレオ前提:** `setAudioChannels(0,2)`。オーバーサンプラーも 2ch 構成。モノデバイス時のフォールバック未対応。
+- **オーバーサンプリング:** ボイス生成のみ 2×。FX は base レート。倍率は `MainComponent.h::kOversampleFactorLog2` で変更可 (1→2×, 2→4×)。
 
 ---
 
@@ -166,4 +206,7 @@ Modulator (倍音エンベロープ): attack=0.5ms, decay=120ms, sustain=0%, rel
 | Phase 3 | UIノブ追加 (Tremolo/Reverb/FM/ADSR) | ✅ 完了 |
 | Phase 4 | Wurlitzer / Rhodes プリセット切り替え | ✅ 完了 |
 | Phase 5 | サステインペダル対応 + 視覚インジケータ | ✅ 完了 |
-| **Phase 6** | **音色ブラッシュアップ (倍音、ノンリニア特性)** | 進行中 (6-4 一部完了) |
+| Phase 6 | 音色ブラッシュアップ (倍音、ノンリニア特性、afterglow、resonance、pedal noise) | ✅ 完了 |
+| Phase 7 | UI/UX 全面リデザイン (VintageLookAndFeel、800×520、VU メーター) | ✅ 完了 |
+| Phase 8 | 正しさ三点パック (位相ラップ・DCブロッカー・固定サイズ) + 2× オーバーサンプリング | ✅ 完了 |
+| **Phase 9** | **2段指数ディケイ / マスターVol+リミッタ / リバーブ刷新 / 状態永続化** | 未着手 (次の優先) |

@@ -28,7 +28,10 @@ public:
         {
             setUsingNativeTitleBar(true);
             setContentOwned(new MainComponent(), true);
-            setResizable(true, true);
+            // Fixed size: the 800×520 panel layout is pixel-tuned (like most
+            // commercial instruments). Free resize would break the absolute
+            // layout in MainComponent::resized/paint.
+            setResizable(false, false);
             centreWithSize(getWidth(), getHeight());
             setVisible(true);
         }
