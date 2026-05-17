@@ -21,8 +21,10 @@
 >   (DRIVE 併用でアンプ的歪み)。RELEASE 一定は実機仕様につき意図的 (変更なし)。
 > - Phase 9-4: **リバーブ刷新 (プリディレイ+wet高域ダンプ+センド構成) + Rhodes
 >   パントレモロ** (Suitcase の vibrato は実機ではステレオオートパン)。
+> - Phase 9-5: **状態永続化** (ApplicationProperties)。終了時に保存、起動時に
+>   プリセット+全ノブ+MASTER を復元。ラウンドトリップ実地検証済み。
 > - **設計原則確定: 音作りは要望より実機挙動の再現を優先**。
-> - 次候補: 状態永続化 (#8) / 描画分離 (#9) / ノブUX+プリセット保存 (#10)。
+> - 次候補: 描画分離 30fps (#9) / ノブUX標準化+プリセット保存 (#10) / 配布 (#11)。
 
 ### ビルド・起動
 
@@ -206,6 +208,17 @@ Modulator (倍音エンベロープ): attack=0.5ms, decay=120ms, sustain=0%, rel
 > 注: リバーブ/パンは base レート (OS 後) で処理。wet バッファは prepareToPlay で
 > maxBlock 確保し再アロケーション無し。モノデバイス時は L のみ (R==null) で従来挙動。
 
+**Phase 9-5 完了 (状態永続化 — 2026-05-17):**
+
+| 項目 | 内容 |
+| --- | --- |
+| 仕組み | `juce::ApplicationProperties` (PropertiesFile)。保存先 `~/Library/Application Support/MySynth/MySynth.settings` (XML) |
+| 保存タイミング | `~MainComponent` (通常終了パス) で `saveState()`。preset + 全9ノブ + MASTER を書き出し |
+| 復元 | 起動時、コンストラクタ末尾 `applyPreset()` 後に `loadState()`。保存プリセットを再適用しキーボードレンジ/トグルを設定後、各ノブを保存値で上書き (sendNotification で atomic も更新)。初回起動 (キー無し) はプリセット既定のまま |
+| 順序ハザード回避 | `applyPreset` からは保存しない (構築中の上書き前に既定値で上書き保存されるのを防止) |
+| 検証 | Rhodes+非デフォルト値を注入→起動→終了でラウンドトリップ実地確認済み (preset=1, drive=2.5, reverb=55, master=85 が保持) |
+| 制約 (将来) | 通常終了で保存。クラッシュ時のセッションは失う。デバウンス自動保存/APVTS 移行は将来タスク。`juce_data_structures` を CMake に追加 |
+
 ---
 
 ## 現在のUI構成
@@ -272,4 +285,4 @@ LED: KEY=発音中(アンバー) / SUS=サステイン(シアン)
 | Phase 6 | 音色ブラッシュアップ (倍音、ノンリニア特性、afterglow、resonance、pedal noise) | ✅ 完了 |
 | Phase 7 | UI/UX 全面リデザイン (VintageLookAndFeel、800×520、VU メーター) | ✅ 完了 |
 | Phase 8 | 正しさ三点パック (位相ラップ・DCブロッカー・固定サイズ) + 2× オーバーサンプリング | ✅ 完了 |
-| **Phase 9** | **2段指数ディケイ(9-1✅) / マスターVol+リミッタ(9-2✅) / 実機準拠調整(9-3✅) / リバーブ刷新+パントレモロ(9-4✅) / 状態永続化** | 進行中 |
+| **Phase 9** | **音作り(9-1〜9-4 ✅) / 状態永続化(9-5 ✅) / 残: 描画分離・ノブUX・配布** | 進行中 |

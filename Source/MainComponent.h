@@ -29,6 +29,12 @@ private:
     void updateMidiStatus();
     void applyPreset(Preset p);
 
+    // Lightweight session persistence (preset + knob positions). Saved on
+    // quit, restored on launch. (Full APVTS state is a future task.)
+    void saveState();
+    void loadState();
+    juce::ApplicationProperties appProperties;
+
     juce::Synthesiser          synthesiser;
     juce::MidiMessageCollector midiCollector;
 

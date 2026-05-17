@@ -133,6 +133,16 @@ MainComponent::MainComponent()
     // Apply vintage look to this component and all children
     setLookAndFeel(&vintageTheme);
 
+    // Where session settings live: ~/Library/Application Support/MySynth/
+    {
+        juce::PropertiesFile::Options opts;
+        opts.applicationName     = "MySynth";
+        opts.filenameSuffix      = "settings";
+        opts.folderName          = "MySynth";
+        opts.osxLibrarySubFolder = "Application Support";
+        appProperties.setStorageParameters(opts);
+    }
+
     synthesiser.addSound(new ElectricPianoSound());
     for (int i = 0; i < kNumVoices; ++i)
     {
@@ -267,17 +277,67 @@ MainComponent::MainComponent()
     setAudioChannels(0, 2);
     openAllMidiInputs();
     applyPreset(currentPreset);
+    loadState();      // restore previous session over the preset defaults
     startTimer(80);   // ~12fps repaint for VU meter
 }
 
 MainComponent::~MainComponent()
 {
+    saveState();      // persist this session (normal-quit path)
     setLookAndFeel(nullptr);
     stopTimer();
     for (auto& m : midiInputs)
         m->stop();
     midiInputs.clear();
     shutdownAudio();
+}
+
+// ---- Session persistence ------------------------------------------------
+
+void MainComponent::saveState()
+{
+    auto* pf = appProperties.getUserSettings();
+    if (pf == nullptr)
+        return;
+
+    pf->setValue("preset",    (int) currentPreset);
+    pf->setValue("fmDepth",   sliderFMDepth     .getValue());
+    pf->setValue("attack",    sliderAttack      .getValue());
+    pf->setValue("release",   sliderRelease     .getValue());
+    pf->setValue("drive",     sliderDrive       .getValue());
+    pf->setValue("tremRate",  sliderTremoloRate .getValue());
+    pf->setValue("tremDepth", sliderTremoloDepth.getValue());
+    pf->setValue("reverb",    sliderReverbWet   .getValue());
+    pf->setValue("chorus",    sliderChorus      .getValue());
+    pf->setValue("master",    sliderMaster      .getValue());
+    appProperties.saveIfNeeded();
+}
+
+void MainComponent::loadState()
+{
+    auto* pf = appProperties.getUserSettings();
+    if (pf == nullptr || ! pf->containsKey("preset"))
+        return;   // first run — keep preset defaults
+
+    // Re-apply the saved preset first (sets the per-preset knob baseline,
+    // keyboard range and toggle highlight), then override knobs with the
+    // user's saved positions so mid-session tweaks survive.
+    const auto saved = (Preset) pf->getIntValue("preset", (int) Preset::Wurlitzer);
+    applyPreset(saved);
+
+    auto restore = [pf](juce::Slider& s, const juce::String& key)
+    {
+        s.setValue(pf->getDoubleValue(key, s.getValue()), juce::sendNotification);
+    };
+    restore(sliderFMDepth,      "fmDepth");
+    restore(sliderAttack,       "attack");
+    restore(sliderRelease,      "release");
+    restore(sliderDrive,        "drive");
+    restore(sliderTremoloRate,  "tremRate");
+    restore(sliderTremoloDepth, "tremDepth");
+    restore(sliderReverbWet,    "reverb");
+    restore(sliderChorus,       "chorus");
+    restore(sliderMaster,       "master");
 }
 
 void MainComponent::openAllMidiInputs()

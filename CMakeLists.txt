@@ -27,6 +27,7 @@ target_link_libraries(MySynth PRIVATE
     juce::juce_audio_basics
     juce::juce_audio_devices
     juce::juce_audio_utils
+    juce::juce_data_structures
     juce::juce_dsp
     juce::juce_gui_basics
     juce::juce_gui_extra
