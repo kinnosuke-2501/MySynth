@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>StageFM — Wurlitzer / Rhodes FM エレクトリックピアノ音源</title>
+<meta name="description" content="StageFM — Wurlitzer 200A / Rhodes Mark II を狙った FM エレクトリックピアノ音源（macOS スタンドアロン）。サンプル画面・デモ演奏あり。">
+<style>
+  :root { --body:#1c1b18; --panel:#2a2416; --amber:#c8922a; --amber2:#e2b46e;
+          --text:#f0ede4; --dim:#9e9a8e; --divider:#4a4030; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { background:var(--body); color:var(--text);
+         font-family:-apple-system,"Helvetica Neue",Arial,sans-serif;
+         line-height:1.7; padding:48px 20px; }
+  .wrap { max-width:680px; margin:0 auto; }
+  .hero { text-align:center; margin-bottom:40px; }
+  .hero img { width:128px; height:128px; border-radius:24px;
+              box-shadow:0 8px 30px rgba(0,0,0,.5); }
+  h1 { font-size:38px; letter-spacing:.04em; margin:18px 0 6px; }
+  .tag { color:var(--dim); font-size:15px; }
+  .card { background:var(--panel); border:1px solid var(--divider);
+          border-radius:12px; padding:24px 28px; margin:18px 0; }
+  h2 { font-size:15px; color:var(--amber); letter-spacing:.12em;
+       text-transform:uppercase; margin-bottom:12px; }
+  ol { padding-left:1.3em; } li { margin:6px 0; }
+  .dl { display:inline-block; background:var(--amber); color:#1a1408;
+        font-weight:700; font-size:17px; text-decoration:none;
+        padding:14px 34px; border-radius:10px; margin:8px 0; }
+  .dl:hover { background:var(--amber2); }
+  .meta { color:var(--dim); font-size:13px; margin-top:10px; }
+  code { background:#11100c; color:var(--amber2); padding:2px 7px;
+         border-radius:5px; font-size:13px; }
+  a { color:var(--amber2); }
+  .foot { text-align:center; color:var(--dim); font-size:12px; margin-top:34px; }
+  strong { color:var(--amber2); }
+
+  /* --- Media sections --- */
+  .shot { width:100%; height:auto; display:block; border-radius:8px;
+          border:1px solid var(--divider); box-shadow:0 6px 20px rgba(0,0,0,.45); }
+  figure { margin:0; }
+  figcaption { color:var(--dim); font-size:12px; text-align:center; margin-top:8px; }
+  .grid2 { display:grid; grid-template-columns:1fr; gap:20px; }
+  @media (min-width:620px) { .grid2 { grid-template-columns:1fr 1fr; } }
+  .demo { margin:14px 0; }
+  .demo .lbl { font-size:14px; margin-bottom:6px; }
+  .demo .lbl b { color:var(--amber2); }
+  audio { width:100%; margin-top:4px; filter:saturate(.85); }
+  video { width:100%; height:auto; border-radius:8px;
+          border:1px solid var(--divider); background:#000; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="hero">
+    <img src="icon.png" alt="StageFM アプリアイコン" width="128" height="128">
+    <h1>StageFM</h1>
+    <p class="tag">Wurlitzer 200A / Rhodes Mark II を狙った FM エレクトリックピアノ音源<br>
+       macOS スタンドアロン・アプリ</p>
+  </div>
+
+  <div class="card">
+    <figure>
+      <img class="shot" loading="lazy"
+           src="media/screenshot-wurli-800.png"
+           srcset="media/screenshot-wurli-800.png 800w, media/screenshot-wurli.png 1600w"
+           sizes="(max-width:680px) 100vw, 680px"
+           width="1600" height="1040"
+           alt="StageFM のメイン画面（WURLI モデル）。FM DEPTH / ATTACK / RELEASE / DRIVE と
+                トレモロ・リバーブなどのノブ、下部に MIDI 鍵盤。">
+      <figcaption>メイン画面（WURLI モデル選択時）</figcaption>
+    </figure>
+  </div>
+
+  <div class="card" style="text-align:center">
+    <a class="dl" href="https://github.com/kinnosuke-2501/MySynth/releases/latest">⬇ ダウンロード（最新版）</a>
+    <p class="meta">リンク先の <strong>Assets</strong> から <code>StageFM-*-macOS.zip</code> を取得してください<br>
+       macOS 11 以降 ／ Apple Silicon・Intel 両対応（Universal）</p>
+  </div>
+
+  <div class="card">
+    <h2>スクリーンショット</h2>
+    <div class="grid2">
+      <figure>
+        <img class="shot" loading="lazy"
+             src="media/screenshot-wurli-800.png"
+             srcset="media/screenshot-wurli-800.png 800w, media/screenshot-wurli.png 1600w"
+             sizes="(max-width:620px) 100vw, 320px"
+             width="1600" height="1040"
+             alt="WURLI モデル：Wurlitzer 200A を狙ったプリセット。アンバー色の WURLI ボタンが点灯。">
+        <figcaption><strong>WURLI</strong> — Wurlitzer 200A 系（リード/バーク）</figcaption>
+      </figure>
+      <figure>
+        <img class="shot" loading="lazy"
+             src="media/screenshot-roads-800.png"
+             srcset="media/screenshot-roads-800.png 800w, media/screenshot-roads.png 1600w"
+             sizes="(max-width:620px) 100vw, 320px"
+             width="1600" height="1040"
+             alt="ROADS モデル：Rhodes Mark II を狙ったプリセット。ROADS ボタンが点灯し、
+                  リリースやコーラスが Rhodes 寄りの値に。">
+        <figcaption><strong>ROADS</strong> — Rhodes Mark II 系（ベル/サスティン）</figcaption>
+      </figure>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>デモ演奏を聴く</h2>
+    <div class="demo">
+      <p class="lbl"><b>WURLI</b> — F マイナーの R&amp;B ヴァンプ（リードの「バーク」が出る中〜強ベロシティ）</p>
+      <audio controls preload="none" src="media/demo-wurli.mp3"
+             aria-label="WURLI デモ演奏（R&amp;B ヴァンプ）"></audio>
+    </div>
+    <div class="demo">
+      <p class="lbl"><b>ROADS</b> — サスティンペダルを踏んだバラード（ティンの伸び・共鳴・ノートオフのベル余韻）</p>
+      <audio controls preload="none" src="media/demo-roads.mp3"
+             aria-label="ROADS デモ演奏（バラード）"></audio>
+    </div>
+    <p class="meta">どちらも本アプリの音声エンジンでオフライン書き出ししたデモです
+       （実機演奏の録音ではなく、自動演奏を同じ合成・エフェクト経路でレンダリング）。</p>
+  </div>
+
+  <div class="card">
+    <h2>デモ動画</h2>
+    <div class="grid2">
+      <figure>
+        <video controls preload="none" playsinline
+                poster="media/screenshot-wurli-800.png"
+                aria-label="WURLI デモ動画">
+          <source src="media/demo-wurli.mp4" type="video/mp4">
+          お使いのブラウザは動画再生に対応していません。
+          <a href="media/demo-wurli.mp4">WURLI デモ動画をダウンロード</a>
+        </video>
+        <figcaption><strong>WURLI</strong> デモ（画面＋音）</figcaption>
+      </figure>
+      <figure>
+        <video controls preload="none" playsinline
+                poster="media/screenshot-roads-800.png"
+                aria-label="ROADS デモ動画">
+          <source src="media/demo-roads.mp4" type="video/mp4">
+          お使いのブラウザは動画再生に対応していません。
+          <a href="media/demo-roads.mp4">ROADS デモ動画をダウンロード</a>
+        </video>
+        <figcaption><strong>ROADS</strong> デモ（画面＋音）</figcaption>
+      </figure>
+    </div>
+    <p class="meta">画面は静止画＋上記デモ音源です（軽量化のため）。タップで再生します。</p>
+  </div>
+
+  <div class="card">
+    <h2>インストール手順</h2>
+    <ol>
+      <li>ダウンロードした <code>StageFM-*-macOS.zip</code> をダブルクリックで解凍</li>
+      <li><code>StageFM.app</code> を「アプリケーション」フォルダにドラッグ</li>
+      <li>一度ダブルクリック（「開けません」と出てOK。一旦キャンセル）</li>
+      <li><strong>アップルメニュー →「システム設定」→「プライバシーとセキュリティ」</strong>
+          を開き、下の方の <strong>「"StageFM" は…」の横の「このまま開く」</strong>
+          ボタンをクリック → パスワード入力</li>
+      <li>もう一度 <code>StageFM.app</code> を開く（以後はダブルクリックで普通に起動）</li>
+    </ol>
+    <p class="meta">macOS 15 (Sequoia) では「右クリック→開く」が使えなくなり、
+       上の「システム設定 → プライバシーとセキュリティ →
+       このまま開く」が正規の手順です。</p>
+  </div>
+
+  <div class="card">
+    <h2>うまくいかない / ターミナルが使える人向け（確実）</h2>
+    <p>上の手順で開けない場合は、<strong>ターミナル.app</strong> を開いて
+       次の1行を貼り付けて Enter（アプリは「アプリケーション」に入れた状態で）：</p>
+    <p><code>xattr -dr com.apple.quarantine /Applications/StageFM.app</code></p>
+    <p class="meta">ダウンロード時に付く「検疫」フラグを外すだけの操作です。以後は普通に起動できます。</p>
+  </div>
+
+  <div class="card">
+    <h2>なぜこの操作が必要？</h2>
+    <p>Apple の有料署名・公証（年 $99）をしていないため、macOS が
+       「開発元を検証できません」と警告します。アプリ自体は ad-hoc 署名
+       済みで、上の一度きりの許可で問題なく動きます（中身が危険という
+       意味ではありません）。ソースは
+       <a href="https://github.com/kinnosuke-2501/MySynth">GitHub で公開</a>
+       しており、自分でビルドも可能です。</p>
+  </div>
+
+  <div class="card">
+    <h2>使い方（最低限）</h2>
+    <ol>
+      <li>USB/DIN の MIDI キーボードを挿してから起動（画面下の鍵盤はマウスでも鳴らせます）</li>
+      <li>ヘッダの <strong>WURLI / ROADS</strong> で音色切替、中央のボックスでプリセット保存/読込</li>
+      <li>音が出ないときは右下の <strong>Settings…</strong> でオーディオ/MIDI を確認</li>
+    </ol>
+  </div>
+
+  <p class="foot">StageFM · built with JUCE · <a href="https://github.com/kinnosuke-2501/MySynth">github.com/kinnosuke-2501/MySynth</a></p>
+
+</div>
+</body>
+</html>
